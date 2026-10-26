@@ -238,7 +238,7 @@ export const QUESTS = {
     steps: [
       { type: 'talk', npc: 'elder', text: 'พบผู้อาวุโส อาเธอร์ เพื่อรับภารกิจ' },
       { type: 'kill', monster: 'slime', map: 'forest', count: 5, text: 'กำจัดสไลม์ในป่าวิญญาณ 5 ตัว' },
-      { type: 'collect', item: 'essence', count: 3, text: 'รวบรวมแก่นพลังสไลม์ 3 ชิ้น' },
+      { type: 'collect', item: 'essence', map: 'forest', count: 3, text: 'รวบรวมแก่นพลังสไลม์ 3 ชิ้น' },
       { type: 'talk', npc: 'smith', text: 'นำแก่นพลังไปให้ช่างตีเหล็ก บอริส' },
       { type: 'kill', monster: 'golem', map: 'mine', count: 3, text: 'ปราบโกเลมลาวา 3 ตัวในเหมือง' },
       { type: 'talk', npc: 'elder', text: 'รายงานผลต่อผู้อาวุโส อาเธอร์' },
@@ -258,7 +258,7 @@ export const QUESTS = {
     title: 'ยาของหมู่บ้าน', giver: 'healer', minLevel: 2,
     steps: [
       { type: 'talk', npc: 'healer', text: 'รับงานจากหมอมีน่า' },
-      { type: 'collect', item: 'herb', count: 5, text: 'เก็บสมุนไพรป่า 5 ต้น' },
+      { type: 'collect', item: 'herb', map: 'forest', count: 5, text: 'เก็บสมุนไพรป่า 5 ต้น' },
       { type: 'talk', npc: 'healer', text: 'ส่งสมุนไพรให้หมอมีน่า' },
     ],
     reward: { exp: 150, gold: 40, mats: { potion_hp: 3 } },

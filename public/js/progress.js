@@ -19,7 +19,7 @@ export function newProgress(classId = 'swordsman') {
     mats: { potion_hp: 3 }, gear: [],
     equip: Object.fromEntries(GEAR_SLOTS.map((s) => [s, null])),
     skills: {}, hotbar: [null, null, null, null, null, null],
-    quests: {}, map: 'town', pos: null, job: null,
+    quests: {}, map: 'town', pos: null, job: null, vip: false,
   };
   const first = skillsOfClass(classId).find((s) => s.tier === 1);
   if (first) {
@@ -92,6 +92,7 @@ export function normalize(raw, classId = 'swordsman') {
     map: MAPS[p.map] ? p.map : 'town',
     pos: validPos(p.pos),
     job: jobLinesOf(classId).includes(p.job) ? p.job : null,
+    vip: p.vip === true,
   };
 }
 

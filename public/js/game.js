@@ -32,6 +32,22 @@ const FX_BASIC_DEFAULT = {
 };
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// First portal on the shortest chain of portals from one map to another (null when already there or unreachable).
+function routeHop(from, to) {
+  const prev = { [from]: null };
+  const queue = [from];
+  while (queue.length && !(to in prev)) {
+    const m = queue.shift();
+    for (const e of PORTALS[m] || []) {
+      if (!(e.to in prev)) { prev[e.to] = { from: m, portal: e }; queue.push(e.to); }
+    }
+  }
+  if (!(to in prev)) return null;
+  let hop = null;
+  for (let cur = to; prev[cur]; cur = prev[cur].from) hop = prev[cur].portal;
+  return hop;
+}
 const rand = (a, b) => a + Math.floor(Math.random() * (b - a + 1));
 const lerpAngle = (a, b, t) => {
   let d = b - a;
@@ -61,6 +77,7 @@ export const Game = {
   cdBasic: 0,
   auto: false,
   exploreT: 0,
+  questAuto: false,
   moveTarget: null,
   targetMon: null,
   interactNpc: null,
@@ -415,6 +432,7 @@ export const Game = {
       }
     }
     if (this.auto) this.autoTick(dt);
+    if (this.questAuto) this.questTick(dt);
 
     const len = Math.hypot(ix, iz);
     h.moving = len > 0;
@@ -926,6 +944,71 @@ export const Game = {
     if (err) Hud.toast(err, 'warn');
     this.dirty = true;
     Hud.refresh(this);
+  },
+
+  // ---------- quest guidance and VIP auto quest ----------
+  // Where the tracked quest needs the hero: { map, x, z, npc, text }. x/z are the nearest matching monster
+  // on that map, or null when none is loaded there.
+  questGuide() {
+    const qid = Hud.activeQuest(this);
+    const step = qid && P.currentStep(this.p, qid);
+    if (!step) return null;
+    if (step.type === 'talk') {
+      const n = NPCS[step.npc];
+      return { map: n.map, x: n.pos[0], z: n.pos[1], npc: step.npc, text: step.text };
+    }
+    const guide = { map: step.map, x: null, z: null, text: step.text };
+    const p = this.hero?.group.position;
+    if (!p || this.p.map !== step.map) return guide;
+    const hits = (this.world?.monsters || []).filter((m) => m.alive && (step.type === 'kill'
+      ? m.id === step.monster
+      : m.def.drops.some(([id]) => id === step.item)));
+    const near = hits.sort((a, b) => Math.hypot(a.x - p.x, a.z - p.z) - Math.hypot(b.x - p.x, b.z - p.z))[0];
+    if (near) { guide.x = near.x; guide.z = near.z; }
+    return guide;
+  },
+
+  // Screen-world point the guide arrow should point at: the spot itself, or the portal that starts the route.
+  guideTarget(guide) {
+    if (!guide) return null;
+    if (guide.map === this.p.map) return guide.x === null ? null : { x: guide.x, z: guide.z };
+    const hop = routeHop(this.p.map, guide.map);
+    return hop ? { x: hop.x, z: hop.z, to: hop.to } : null;
+  },
+
+  // VIP only. Free players get the arrow; VIP players also walk, talk and fight their way through the quest.
+  setQuestAuto(on) {
+    if (on && !this.p.vip) {
+      Hud.toast('ออโต้เควสเป็นสิทธิพิเศษของสมาชิก VIP', 'warn');
+      Sfx.play('error');
+      return;
+    }
+    this.questAuto = on && !!this.questGuide();
+    if (!this.questAuto) this.moveTarget = null;
+    Hud.toast(this.questAuto ? 'เปิดออโต้เควส: กำลังไปทำภารกิจ' : 'ปิดออโต้เควส', this.questAuto ? 'gold' : '');
+    Sfx.play(this.questAuto ? 'click' : 'tab');
+    Hud.refresh(this);
+  },
+
+  questTick(dt) {
+    const guide = this.questGuide();
+    if (!guide || !this.guideTarget(guide)) { this.setQuestAuto(false); return; }
+    const p = this.hero.group.position;
+    if (guide.map !== this.p.map) {
+      const t = this.guideTarget(guide);
+      this.moveTarget = { x: t.x, z: t.z };
+      return;
+    }
+    if (guide.npc) {
+      if (Math.hypot(guide.x - p.x, guide.z - p.z) < NPC_RANGE * 0.8) {
+        this.moveTarget = null;
+        this.talkTo(guide.npc);
+      } else {
+        this.moveTarget = { x: guide.x, z: guide.z };
+      }
+      return;
+    }
+    if (!this.auto) this.autoTick(dt);
   },
 
   // ---------- NPCs ----------

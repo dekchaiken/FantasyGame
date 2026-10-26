@@ -44,6 +44,22 @@ export const Hud = {
   bindOnce() {
     if (this.bound) return;
     this.bound = true;
+    // Drag a learned skill onto a hotbar slot.
+    document.addEventListener('dragstart', (e) => {
+      const el = e.target.closest('[data-drag]');
+      if (!el) return;
+      e.dataTransfer.setData('text/plain', el.dataset.drag);
+      e.dataTransfer.effectAllowed = 'copy';
+    });
+    document.addEventListener('dragover', (e) => {
+      if (e.target.closest('[data-drop]')) e.preventDefault();
+    });
+    document.addEventListener('drop', (e) => {
+      const el = e.target.closest('[data-drop]');
+      if (!el || !this.g) return;
+      e.preventDefault();
+      this.g.setHotbar(Number(el.dataset.drop), e.dataTransfer.getData('text/plain'));
+    });
     document.addEventListener('click', (e) => {
       const el = e.target.closest('[data-act]');
       if (!el || !this.g) return;
@@ -79,6 +95,7 @@ export const Hud = {
         case 'travel': this.close(); g.enterMap(d.map, null); break;
         case 'talk': this.close(); g.talkTo(d.npc); break;
         case 'track': this.tracked = d.quest; this.refresh(g); break;
+        case 'qauto': g.setQuestAuto(!g.questAuto); break;
         case 'tab': this.windowData.tab = d.tab; this.refresh(g); break;
         default: break;
       }
@@ -159,11 +176,38 @@ export const Hud = {
       const c = document.getElementById('status-thumb');
       if (c) drawThumb(c.getContext('2d'), g.character, 0, 0, 180, 180);
     }
+    if (kind === 'skills') {
+      const c = document.getElementById('skill-thumb');
+      if (c) drawThumb(c.getContext('2d'), g.character, 0, 0, c.width, c.height);
+    }
     if (kind === 'inventory') {
       const c = document.getElementById('bag-thumb');
       if (c) drawThumb(c.getContext('2d'), g.character, 0, 0, c.width, c.height);
     }
     void p;
+  },
+
+  activeQuest(g) {
+    return this.tracked && g.p.quests[this.tracked]?.status === 'active' ? this.tracked : this.trackedFallback(g);
+  },
+
+  // Guide arrow around the hero and the quest tracker's distance line and VIP button.
+  guideRefresh(g) {
+    const guide = g.questGuide();
+    const tgt = g.guideTarget(guide);
+    const arrow = $('quest-arrow');
+    const pos = g.hero.group.position;
+    const dist = tgt ? Math.hypot(tgt.x - pos.x, tgt.z - pos.z) : 0;
+    arrow.hidden = !tgt || dist < 2.5;
+    if (tgt) arrow.style.setProperty('--a', Math.atan2(tgt.x - pos.x, -(tgt.z - pos.z)) + 'rad');
+    if (!guide) $('q-dist').textContent = '';
+    else if (guide.map !== g.p.map) $('q-dist').textContent = `ไปที่ ${MAPS[tgt ? tgt.to : guide.map].name}`;
+    else $('q-dist').textContent = tgt ? `ระยะ ${Math.round(dist)}` : 'ตามหาในแมพนี้';
+    const btn = $('q-auto');
+    btn.disabled = !g.p.vip && !g.questAuto;
+    btn.innerHTML = g.p.vip
+      ? `${icon('arrowup')} ${g.questAuto ? 'หยุดออโต้' : 'ออโต้ไปเควส'}`
+      : `${icon('lock')} ออโต้ (VIP)`;
   },
 
   trackedFallback(g) {
@@ -192,7 +236,8 @@ export const Hud = {
     }
 
     // quest tracker
-    const qid = this.tracked && p.quests[this.tracked]?.status === 'active' ? this.tracked : this.trackedFallback(g);
+    const qid = this.activeQuest(g);
+    this.guideRefresh(g);
     if (qid) {
       const step = P.currentStep(p, qid);
       $('q-title').textContent = QUESTS[qid].title;
@@ -602,45 +647,6 @@ function statRow(label, value) {
 const LINE_COLORS = ['#ff7a9c', '#4aa8ff', '#34c79a', '#ffb020', '#a58bff'];
 const sfxBtn = () => `<button class="sfx-btn" data-act="sfx" aria-label="เสียง">${icon(Sfx.muted ? 'mute' : 'sound')}</button>`;
 
-function skillsHtml(g, w) {
-  const p = g.p;
-  const cls = g.character.classId;
-  const cols = (SKILL_TREE[cls] || []).map((line, i) => ({ name: line.name, color: LINE_COLORS[i], tiers: line.tiers }));
-  const custom = Object.values(g.skillMap).filter((s) => s.line === 'custom');
-  if (custom.length) cols.push({ name: 'สกิลกำหนดเอง', color: LINE_COLORS[4], tiers: custom });
-  const all = cols.flatMap((c) => c.tiers);
-  const selId = w.sk && g.skillMap[w.sk] ? w.sk : all[0]?.id;
-  const selCol = cols.find((c) => c.tiers.some((s) => s.id === selId));
-
-  const node = (sk, color) => {
-    const rank = p.skills[sk.id] || 0;
-    const locked = !rank && P.canLearn(p, sk.id);
-    const jobLocked = !!P.skillJobLock(p, sk.id);
-    const cls2 = ['sk-node', rank ? 'learned' : '', locked ? 'locked' : '', jobLocked ? 'jlock' : '', sk.id === selId ? 'sel' : ''].join(' ');
-    return `<button class="${cls2}" style="--lc:${color};--pct:${(rank / MAX_RANK) * 100}%" data-act="sk-sel" data-id="${sk.id}">
-      <span class="sk-orb">${icon(sk.icon)}<em>${rank}/${MAX_RANK}</em></span>
-      <span class="sk-nm">${esc(sk.name)}</span>
-      <span class="sk-lv">${sk.tier ? `ขั้น ${sk.tier} · Lv ${TIER_LEVEL[sk.tier - 1]}` : 'กำหนดเอง'}</span></button>`;
-  };
-  const board = cols.map((c) => `<div class="sk-col" style="--lc:${c.color}">
-      <div class="sk-col-head"><b>${esc(c.name)}</b><small>${c.tiers.length} ขั้น</small></div>
-      ${c.tiers.map((sk, i) => node(sk, c.color) + (i < c.tiers.length - 1 ? '<div class="sk-link"></div>' : '')).join('')}
-    </div>`).join('');
-
-  const slots = [1, 2, 3, 4, 5, 6].map((n) => {
-    const s = p.hotbar[n - 1] && g.skillMap[p.hotbar[n - 1]];
-    return `<button class="sk-slot${s ? '' : ' empty'}" data-act="hot" data-slot="${n}" data-id="" title="${s ? 'เอาออก' : 'ว่าง'}">
-      <kbd>${n}</kbd>${s ? icon(s.icon) : '<i></i>'}<span>${s ? esc(s.name) : 'ว่าง'}</span></button>`;
-  }).join('');
-
-  const detail = selId ? skillDetail(g, g.skillMap[selId], selCol?.color || LINE_COLORS[0]) : '<div class="empty">ไม่มีสกิล</div>';
-  return `<div class="sk-bar">
-      <div class="sk-points"><span>แต้มสกิล</span><b>${P.skillPoints(p)}</b><small>+${2} ต่อเลเวล</small></div>${jobTagHtml(p)}
-      <div class="sk-hotbar">${slots}</div>${sfxBtn()}
-    </div>
-    <div class="sk-board">${board}</div>
-    <div class="sk-detail" style="--lc:${selCol?.color || LINE_COLORS[0]}">${detail}</div>`;
-}
 
 // What a skill does with the hero's current stats, plus the rank-up table.
 function skillDetail(g, sk, color) {
@@ -664,7 +670,7 @@ function skillDetail(g, sk, color) {
     ? (reason ? `<small class="lock-note">${esc(reason)}</small>`
       : `<button class="btn-primary" data-act="learn" data-id="${sk.id}">${rank ? `อัปเป็นระดับ ${rank + 1}` : 'เรียนรู้สกิลนี้'}</button>`)
     : '<span class="tag">ระดับสูงสุดแล้ว</span>';
-  const hot = rank ? `<div class="sk-assign"><span>ตั้งปุ่มลัด</span>${[1, 2, 3, 4, 5, 6].map((n) => `<button class="${p.hotbar[n - 1] === sk.id ? 'on' : ''}" data-act="hot" data-slot="${n}" data-id="${sk.id}">${n}</button>`).join('')}</div>` : '';
+  const hot = `<div class="sk-assign"><span>${rank ? 'ตั้งปุ่มลัด' : 'เรียนรู้ก่อนจึงตั้งปุ่มลัดได้'}</span>${[1, 2, 3, 4, 5, 6].map((n) => `<button class="${p.hotbar[n - 1] === sk.id ? 'on' : ''}" data-act="hot" data-slot="${n}" data-id="${sk.id}" ${rank ? '' : 'disabled'}>${n}</button>`).join('')}</div>`;
   return `<div class="sk-head">
       <span class="sk-big" style="color:${color}">${icon(sk.icon)}</span>
       <div><b>${esc(sk.name)}</b><small>${esc(sk.lineName || 'สกิลกำหนดเอง')} · ${sk.tier ? `ขั้น ${sk.tier} · ต้องเลเวล ${sk.reqLv}` : 'สร้างจาก Skill Lab'}</small>
@@ -775,4 +781,60 @@ function jobHtml(g) {
       <small>สาย${esc(l.name)} · ${l.tiers.map((s) => esc(s.name)).join(' · ')}</small>
       <button class="btn-primary sm" data-act="job" data-line="${l.line}">เลือกอาชีพนี้</button>
     </div>`).join('')}</div>`;
+}
+
+// ---------- skill window: hero panel on the left, skill tree and detail on the right ----------
+function skillsHtml(g, w) {
+  const p = g.p;
+  const st = g.stats;
+  const cls = g.character.classId;
+  const cols = (SKILL_TREE[cls] || []).map((line, i) => ({ name: line.name, color: LINE_COLORS[i], tiers: line.tiers }));
+  const custom = Object.values(g.skillMap).filter((s) => s.line === 'custom');
+  if (custom.length) cols.push({ name: 'สกิลกำหนดเอง', color: LINE_COLORS[4], tiers: custom });
+  const all = cols.flatMap((c) => c.tiers);
+  const selId = w.sk && g.skillMap[w.sk] ? w.sk : all[0]?.id;
+  const selCol = cols.find((c) => c.tiers.some((s) => s.id === selId));
+
+  const node = (sk, color) => {
+    const rank = p.skills[sk.id] || 0;
+    const locked = !rank && P.canLearn(p, sk.id);
+    const jobLocked = !!P.skillJobLock(p, sk.id);
+    const cls2 = ['sk-node', rank ? 'learned' : '', locked ? 'locked' : '', jobLocked ? 'jlock' : '', sk.id === selId ? 'sel' : ''].join(' ');
+    return `<button class="${cls2}" style="--lc:${color};--pct:${(rank / MAX_RANK) * 100}%" data-act="sk-sel" data-id="${sk.id}"
+      draggable="${rank ? 'true' : 'false'}" data-drag="${rank ? sk.id : ''}" title="${rank ? 'ลากไปวางที่ปุ่มลัด' : ''}">
+      <span class="sk-orb">${icon(sk.icon)}<em>${rank}/${MAX_RANK}</em></span>
+      <span class="sk-nm">${esc(sk.name)}</span>
+      <span class="sk-lv">${sk.tier ? `ขั้น ${sk.tier} · Lv ${TIER_LEVEL[sk.tier - 1]}` : 'กำหนดเอง'}</span></button>`;
+  };
+  const board = cols.map((c) => `<div class="sk-col" style="--lc:${c.color}">
+      <div class="sk-col-head"><b>${esc(c.name)}</b><small>${c.tiers.length} ขั้น</small></div>
+      ${c.tiers.map((sk, i) => node(sk, c.color) + (i < c.tiers.length - 1 ? '<div class="sk-link"></div>' : '')).join('')}
+    </div>`).join('');
+
+  const slots = [1, 2, 3, 4, 5, 6].map((n) => {
+    const s = p.hotbar[n - 1] && g.skillMap[p.hotbar[n - 1]];
+    return `<button class="hb-row${s ? '' : ' empty'}" data-act="hot" data-slot="${n}" data-id="" data-drop="${n}"
+      title="${s ? 'กดเพื่อเอาออก' : 'ลากสกิลมาวางที่นี่'}"><kbd>${n}</kbd>${s ? icon(s.icon) : '<i></i>'}<span>${s ? esc(s.name) : 'ลากสกิลมาวาง'}</span></button>`;
+  }).join('');
+
+  const hero = `<aside class="sk-hero">
+      <canvas id="skill-thumb" width="180" height="180"></canvas>
+      <b class="sk-hname">${esc(g.character.name)}</b>
+      <div class="sk-hsub">${esc(CLASSES[cls].name)}</div>
+      ${jobTagHtml(p)}
+      <div class="sk-points"><span>แต้มสกิล</span><b>${P.skillPoints(p)}</b><small>+2 ต่อเลเวล</small></div>
+      <div class="sub-title">ปุ่มลัด 1-6</div>
+      <div class="hb-list">${slots}</div>
+      <div class="sub-title">สเตตัส</div>
+      <div class="sk-hstats">${[['ATK', fmt(st.atk)], ['DEF', fmt(st.def)], ['HP', fmt(st.maxHp)], ['MP', fmt(st.maxMp)], ['สกิลดาเมจ', `+${st.skillMg}%`], ['ลดคูลดาวน์', `${st.cdr}%`]]
+        .map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>
+      ${sfxBtn()}
+    </aside>`;
+
+  const detail = selId ? skillDetail(g, g.skillMap[selId], selCol?.color || LINE_COLORS[0]) : '<div class="empty">ไม่มีสกิล</div>';
+  return `<div class="sk-layout">${hero}
+    <section class="sk-main">
+      <div class="sk-tree">${board}</div>
+      <div class="sk-detail" style="--lc:${selCol?.color || LINE_COLORS[0]}">${detail}</div>
+    </section></div>`;
 }
