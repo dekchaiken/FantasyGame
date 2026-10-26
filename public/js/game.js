@@ -8,6 +8,8 @@ import { Monster } from './monster.js';
 import { Hud } from './hud.js';
 import { API } from './api.js';
 import { CLASSES } from './config.js';
+import { JOB_NAMES } from './skills.js';
+import { Sfx } from './sfx.js';
 import { MAPS, PORTALS, NPCS, MONSTERS, QUESTS, MATERIALS, GEAR, RARITY, GRADES } from './data.js';
 import { SKILL_BY_ID, rankMult, rankCooldown } from './skills.js';
 import * as P from './progress.js';
@@ -20,6 +22,7 @@ const TOWN_LIMIT = 19;
 const NPC_RANGE = 2.6;
 const SAVE_EVERY = 6;
 const PORTAL_RANGE = 1.3;
+const PORTAL_COLOR = { town: '#ffd166', forest: '#5ee7ff', meadow: '#9be36b', mine: '#ff6a3d', ruin: '#c58bff' };
 const SHIELD_TIME = 5;
 const FX_BASIC_DEFAULT = {
   swordsman: { type: 'slash', color: '#ffd166', color2: '#ffffff', count: 1, size: 70, duration: 240, speed: 0, shake: 1 },
@@ -143,6 +146,17 @@ export const Game = {
   },
 
   // Skills on the hotbar, with their ranks. Empty slots are null.
+  // Changes the hero's job once, at JOB_LEVEL or above.
+  chooseJob(line) {
+    const err = P.chooseJob(this.p, line, this.character.classId);
+    if (err) { Hud.toast(err, 'warn'); Sfx.play('error'); return; }
+    Hud.toast(`เปลี่ยนอาชีพเป็น ${JOB_NAMES[line]}!`, 'gold');
+    Sfx.play('learn');
+    this.aura(CLASSES[this.character.classId].color, 2.4);
+    this.dirty = true;
+    Hud.refresh(this);
+  },
+
   hotSkill(slot) {
     const id = this.p.hotbar[slot - 1];
     const s = id && this.skillMap[id];
@@ -184,7 +198,7 @@ export const Game = {
     }
 
     for (const e of PORTALS[id] || []) {
-      const color = e.to === 'town' ? '#ffd166' : e.to === 'mine' ? '#ff6a3d' : '#5ee7ff';
+      const color = PORTAL_COLOR[e.to] || '#5ee7ff';
       world.portals.push({ ...e, view: makePortal(this.scene, e, color) });
       world.labels.push({ x: e.x, y: 2.6, z: e.z, text: e.label, kind: 'portal' });
     }
@@ -695,6 +709,8 @@ export const Game = {
       if (!s) Hud.toast('ยังไม่ได้ตั้งสกิลในช่องนี้ (เปิดหน้าสกิลเพื่อตั้งปุ่ม)', 'warn');
       return;
     }
+    const lock = P.skillJobLock(this.p, s.id);
+    if (lock) { Hud.toast(`${s.name}: ${lock}`, 'warn'); Sfx.play('error'); return; }
     const now = performance.now();
     if ((this.cooldowns[s.id] || 0) > now) return;
     const h = this.hero;
@@ -794,7 +810,7 @@ export const Game = {
     const ready = (s) => (this.cooldowns[s.id] || 0) <= performance.now() && this.hero.mp >= s.mp;
     for (let slot = 1; slot <= 6; slot++) {
       const s = this.hotSkill(slot);
-      if (!s || !ready(s)) continue;
+      if (!s || !ready(s) || P.skillJobLock(this.p, s.id)) continue;
       if (s.heal) {
         if (this.hero.hp < this.stats.maxHp * 0.6) { this.useSkill(slot); break; }
         continue;

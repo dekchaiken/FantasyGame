@@ -5,6 +5,16 @@
 export const TIER_LEVEL = [1, 5, 10, 15];
 export const MAX_RANK = 3;
 
+// Job change: at JOB_LEVEL a hero picks one of its class's three lines as its job, once.
+// Tier 1 skills stay open to everyone. Tiers 2-4 of other lines are locked to other jobs.
+export const JOB_LEVEL = 20;
+export const JOB_NAMES = {
+  guard: 'อัศวินพิทักษ์', storm: 'นักรบพายุ', light: 'ดาบศักดิ์สิทธิ์',
+  shadow: 'นักฆ่าเงา', poison: 'พิษาจารย์', wind: 'นินจาสายลม',
+  fire: 'จอมเวทเพลิง', ice: 'จอมเวทน้ำแข็ง', thunder: 'จอมเวทสายฟ้า',
+  holy: 'นักบวชศักดิ์สิทธิ์', mend: 'ผู้รักษาแสง', support: 'ผู้นำทางกล้าหาญ',
+};
+
 const fx = (type, color, color2, o = {}) => ({ type, color, color2, count: 24, size: 7, duration: 500, speed: 200, shake: 2, ...o });
 
 function sk(classId, line, lineName, tier, id, name, icon, o) {

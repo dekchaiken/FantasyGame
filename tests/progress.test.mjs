@@ -143,8 +143,10 @@ test('skill points: one per level, tiers need their line, ranks cap at three', (
   assert.equal(P.skillPoints(p), 0);
   P.addExp(p, P.expToNext(1) + P.expToNext(2) + P.expToNext(3) + P.expToNext(4));
   assert.equal(P.skillPoints(p), 2 * (p.level - 1));
-  assert.equal(P.canLearn(p, 'mg_f2'), null, 'tier 2 is open because tier 1 is learned');
-  assert.match(P.canLearn(p, 'mg_i2'), /ต้องเรียนรู้/);
+  assert.match(P.canLearn(p, 'mg_f2'), /ต้องเป็น/, 'tier 2 needs the job');
+  p.job = 'fire';
+  assert.equal(P.canLearn(p, 'mg_f2'), null, 'tier 2 is open once the job is held');
+  assert.match(P.canLearn(p, 'mg_i2'), /ต้องเรียนรู้|ต้องเป็น/);
   assert.equal(P.learnSkill(p, 'mg_f1'), null);
   assert.equal(p.skills.mg_f1, 2);
   p.level = 30;
@@ -235,9 +237,43 @@ test('kills on the wrong map or of the wrong monster do not count', () => {
   assert.equal(p.quests.main_1.step, 1);
 });
 
-test('the mine is gated by level 8', () => {
+test('each level band has its own map', () => {
   const p = P.newProgress();
+  assert.equal(P.mapUnlocked(p, 'meadow'), false);
+  p.level = 5;
+  assert.equal(P.mapUnlocked(p, 'meadow'), true);
   assert.equal(P.mapUnlocked(p, 'mine'), false);
-  p.level = 8;
+  p.level = 10;
   assert.equal(P.mapUnlocked(p, 'mine'), true);
+  assert.equal(P.mapUnlocked(p, 'ruin'), false);
+  p.level = 20;
+  assert.equal(P.mapUnlocked(p, 'ruin'), true);
+});
+
+test('job: chosen once at level 20, from the class own lines', () => {
+  const p = P.newProgress('mage');
+  assert.match(P.chooseJob(p, 'fire', 'mage'), /ต้องถึงเลเวล 20/);
+  p.level = 20;
+  assert.match(P.chooseJob(p, 'holy', 'mage'), /ไม่ใช่ของคลาส/);
+  assert.equal(P.chooseJob(p, 'fire', 'mage'), null);
+  assert.equal(p.job, 'fire');
+  assert.match(P.chooseJob(p, 'ice', 'mage'), /เปลี่ยนไม่ได้/);
+});
+
+test('job: other lines tier 2+ are locked, tier 1 stays open', () => {
+  const p = P.newProgress('mage');
+  p.level = 30;
+  p.job = 'fire';
+  p.skills = { mg_f1: 1 };
+  assert.equal(P.skillUsable(p, 'mg_f1'), true);
+  assert.equal(P.skillUsable(p, 'mg_i1'), false, 'learned skills need the job too');
+  assert.equal(P.skillJobLock(p, 'mg_i1'), null, 'tier 1 of another line is always open');
+  assert.match(P.skillJobLock(p, 'mg_i2'), /ต้องเป็นจอมเวทน้ำแข็ง/);
+});
+
+test('normalize keeps a job only when it belongs to the class', () => {
+  const p = P.normalize({ ...P.newProgress('mage'), job: 'holy' }, 'mage');
+  assert.equal(p.job, null);
+  const q = P.normalize({ ...P.newProgress('mage'), job: 'fire' }, 'mage');
+  assert.equal(q.job, 'fire');
 });

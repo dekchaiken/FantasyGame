@@ -22,6 +22,12 @@ const BIOMES = {
   mine: {
     ground: ['#5a5560', '#4a4450', '#67606f'], path: '#3a3440', fog: '#4a2a2a', lava: '#ff6a3d',
   },
+  meadow: {
+    ground: ['#9ccf5f', '#8ebf55', '#b2dc73'], path: '#d6b97a', fog: '#fff0c2', lava: null,
+  },
+  ruin: {
+    ground: ['#9e9bb0', '#8c8a9e', '#b3b0c4'], path: '#6f6b82', fog: '#e8dcff', lava: null,
+  },
 };
 
 // Returns { solids, half, spawnNorth, spawnEast } for the caller to place the hero and monsters.

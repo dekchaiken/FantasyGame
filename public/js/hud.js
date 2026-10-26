@@ -1,7 +1,7 @@
 import { icon } from './icons.js';
 import { CLASSES, HUD_MENUS } from './config.js';
 import { MAPS, NPCS, QUESTS, MATERIALS, GEAR, RARITY, MAX_ENH, ENH_DOWN_FROM } from './data.js';
-import { SKILL_TREE, TIER_LEVEL, MAX_RANK, rankMult, rankCooldown } from './skills.js';
+import { SKILL_TREE, TIER_LEVEL, MAX_RANK, JOB_LEVEL, JOB_NAMES, rankMult, rankCooldown } from './skills.js';
 import { Sfx } from './sfx.js';
 import * as P from './progress.js';
 import { drawThumb } from './thumb.js';
@@ -64,6 +64,7 @@ export const Hud = {
         case 'cat': this.windowData.cat = d.cat; this.windowData.sel = null; this.refresh(g); break;
         case 'select': this.windowData.sel = d.uid; this.refresh(g); break;
         case 'craft': g.craft(d.line, Number(d.band)); break;
+        case 'job': g.chooseJob(d.line); break;
         case 'unequip': g.unequip(d.slot); break;
         case 'sell': g.sell(d.uid); break;
         case 'learn': {
@@ -176,7 +177,7 @@ export const Hud = {
     const h = g.hero;
     const s = g.stats;
     $('hud-name').textContent = g.character.name;
-    $('hud-class').textContent = CLASSES[g.character.classId].name;
+    $('hud-class').textContent = p.job ? JOB_NAMES[p.job] : CLASSES[g.character.classId].name;
     $('hud-lv').textContent = 'Lv.' + p.level;
     setBar('bar-hp', h.hp / s.maxHp);
     setBar('bar-mp', h.mp / s.maxMp);
@@ -417,6 +418,7 @@ function bagHtml(g, hud) {
       const base = GEAR[it.gear.base];
       const eq = GEAR_SLOTS_EQUIPPED(p, it.gear.uid);
       return `<button class="bag-item${sel === it.key ? ' sel' : ''}${eq ? ' eq' : ''}" style="--gc:${base.gcolor}" data-act="select" data-uid="${it.key}">
+        <span class="bi-lv" style="--bc:${bandColor(base.level)}">Lv${base.level}</span>
         <span class="bi-ico">${icon(base.icon)}</span>${it.gear.enh ? `<em>+${it.gear.enh}</em>` : ''}${eq ? '<i class="eq-dot"></i>' : ''}<small>${esc(base.name)}</small></button>`;
     }
     const m = MATERIALS[it.mat];
@@ -471,7 +473,7 @@ function gearDetail(g, item) {
   const enh = `<div class="enh-line"><span>ตีบวก +${item.enh}${item.enh >= MAX_ENH ? ' (สูงสุด)' : ''}</span>
       ${item.enh >= MAX_ENH ? '' : `<button class="btn-primary sm" data-act="enh-open" data-uid="${item.uid}">ไปหน้าตีบวก</button>`}</div>`;
   return `<div class="detail-head"><span class="di" style="color:${base.gcolor}">${icon(base.icon)}</span>
-      <div><b>${gearLabel(item)}</b><small>${SLOT_LABEL[base.slot] || 'อาวุธ'} · ${GRADES_NAME(base.grade)} · ต้องเลเวล ${base.level} · ${stats}${base.classId ? ' · ' + (base.classId === g.character.classId ? 'สายของคุณ' : 'ของสายอาชีพอื่น') : ''}</small>
+      <div>${frameRow(base)}<b>${gearLabel(item)}</b><small>${SLOT_LABEL[base.slot] || 'อาวุธ'} · ${GRADES_NAME(base.grade)} · ต้องเลเวล ${base.level} · ${stats}${base.classId ? ' · ' + (base.classId === g.character.classId ? 'สายของคุณ' : 'ของสายอาชีพอื่น') : ''}</small>
       <ul class="opts">${optionsHtml(item)}</ul></div></div>
     <div class="detail-actions">${btns.join('')}</div>${enh}`;
 }
@@ -582,6 +584,7 @@ function npcHtml(g, npcId) {
     }).join('')}</div>`;
   }
   if (npcId === 'smith') html += craftHtml(g);
+  if (npcId === 'jobmaster') html += jobHtml(g);
   html += `<div class="row-meta"><span>${icon('coin')} ${fmt(p.gold)} เหรียญ</span><button class="btn-ghost sm" data-act="talk" data-npc="${npcId}">คุยต่อ</button></div>`;
   return html;
 }
@@ -612,7 +615,8 @@ function skillsHtml(g, w) {
   const node = (sk, color) => {
     const rank = p.skills[sk.id] || 0;
     const locked = !rank && P.canLearn(p, sk.id);
-    const cls2 = ['sk-node', rank ? 'learned' : '', locked ? 'locked' : '', sk.id === selId ? 'sel' : ''].join(' ');
+    const jobLocked = !!P.skillJobLock(p, sk.id);
+    const cls2 = ['sk-node', rank ? 'learned' : '', locked ? 'locked' : '', jobLocked ? 'jlock' : '', sk.id === selId ? 'sel' : ''].join(' ');
     return `<button class="${cls2}" style="--lc:${color};--pct:${(rank / MAX_RANK) * 100}%" data-act="sk-sel" data-id="${sk.id}">
       <span class="sk-orb">${icon(sk.icon)}<em>${rank}/${MAX_RANK}</em></span>
       <span class="sk-nm">${esc(sk.name)}</span>
@@ -631,7 +635,7 @@ function skillsHtml(g, w) {
 
   const detail = selId ? skillDetail(g, g.skillMap[selId], selCol?.color || LINE_COLORS[0]) : '<div class="empty">ไม่มีสกิล</div>';
   return `<div class="sk-bar">
-      <div class="sk-points"><span>แต้มสกิล</span><b>${P.skillPoints(p)}</b><small>+${2} ต่อเลเวล</small></div>
+      <div class="sk-points"><span>แต้มสกิล</span><b>${P.skillPoints(p)}</b><small>+${2} ต่อเลเวล</small></div>${jobTagHtml(p)}
       <div class="sk-hotbar">${slots}</div>${sfxBtn()}
     </div>
     <div class="sk-board">${board}</div>
@@ -738,4 +742,37 @@ function enhHtml(g, w) {
       </div>
     </div>
   </div>`;
+}
+
+// ---------- level bands, item frames and job ----------
+const BAND_COLORS = ['#7ad7ff', '#7be39a', '#ffd166', '#ff9a6b', '#c58bff', '#ff6f9c'];
+const bandIndex = (level) => Math.max(0, Math.min(BAND_COLORS.length - 1, level / 5 - 1));
+const bandColor = (level) => BAND_COLORS[bandIndex(level)];
+const bandName = (level) => BANDS_LIST[bandIndex(level)].name;
+
+// Frame line above an item's name: its level band and its grade.
+function frameRow(base) {
+  return `<div class="frame-row">
+      <span class="lv-chip" style="--bc:${bandColor(base.level)}">เลเวล ${base.level} · ${bandName(base.level)}</span>
+      <span class="gr-chip" style="--gc:${base.gcolor}">${GRADES_NAME(base.grade)}</span></div>`;
+}
+
+function jobTagHtml(p) {
+  return p.job
+    ? `<span class="job-tag">${icon('star')} ${esc(JOB_NAMES[p.job])}</span>`
+    : `<span class="job-tag off">ยังไม่มีอาชีพขั้นที่ 1 (เลเวล ${JOB_LEVEL})</span>`;
+}
+
+// Job master window: shows the first-job choice at JOB_LEVEL.
+function jobHtml(g) {
+  const p = g.p;
+  if (p.job) return `<div class="job-note">อาชีพปัจจุบันของคุณคือ <b>${esc(JOB_NAMES[p.job])}</b> สกิลของอาชีพอื่นจะใช้ไม่ได้</div>`;
+  if (p.level < JOB_LEVEL) return `<div class="job-note">กลับมาหาข้าเมื่อถึงเลเวล ${JOB_LEVEL} เพื่อเลือกอาชีพขั้นที่ 1 (เลือกได้ครั้งเดียว)</div>`;
+  const lines = SKILL_TREE[g.character.classId] || [];
+  return `<div class="sub-title">${icon('star')} เลือกอาชีพขั้นที่ 1</div><div class="job-list">${lines.map((l, i) => `
+    <div class="job-card" style="--lc:${LINE_COLORS[i]}">
+      <b>${esc(JOB_NAMES[l.line])}</b>
+      <small>สาย${esc(l.name)} · ${l.tiers.map((s) => esc(s.name)).join(' · ')}</small>
+      <button class="btn-primary sm" data-act="job" data-line="${l.line}">เลือกอาชีพนี้</button>
+    </div>`).join('')}</div>`;
 }

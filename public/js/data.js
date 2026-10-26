@@ -30,8 +30,8 @@ export const BANDS = [
 ];
 // Grades. weight = drop chance weight, opts = [min, max] random options, aura = glow colour.
 export const GRADES = [
-  { name: 'ธรรมดา', color: '#aab4c8', mult: 1, opts: [0, 1], aura: null, weight: 45, epithet: '' },
-  { name: 'พื้นฐาน', color: '#e8f1ff', mult: 1.25, opts: [1, 1], aura: '#ffffff', weight: 25, epithet: 'อย่างดี' },
+  { name: 'ธรรมดา', color: '#7b8aa8', mult: 1, opts: [0, 1], aura: null, weight: 45, epithet: '' },
+  { name: 'พื้นฐาน', color: '#35b87a', mult: 1.25, opts: [1, 1], aura: '#ffffff', weight: 25, epithet: 'อย่างดี' },
   { name: 'หายาก', color: '#4fa3ff', mult: 1.6, opts: [1, 2], aura: '#4fa3ff', weight: 15, epithet: 'ชั้นเยี่ยม' },
   { name: 'แรร์', color: '#b77bff', mult: 2.0, opts: [2, 3], aura: '#b77bff', weight: 9, epithet: 'ชั้นวิเศษ' },
   { name: 'ตำนาน', color: '#ffb84d', mult: 2.6, opts: [3, 4], aura: '#ffb84d', weight: 5, epithet: 'แห่งตำนาน' },
@@ -131,6 +131,26 @@ export const MONSTERS = {
     aggro: 6, range: 1.6, cd: 1.2, speed: 3.0, size: 1.1, shape: 'wolf', color: '#7d8aa6',
     drops: [['wolf_fang', 0.6], ['potion_hp', 0.15], ['enh_stone', 0.12]], gearChance: 0.07,
   },
+  fire_slime: {
+    name: 'สไลม์ไฟ', level: 6, hp: 120, atk: 11, def: 2, exp: 52, gold: [8, 14], respawn: 12,
+    aggro: 5, range: 1.3, cd: 1.3, speed: 2.0, size: 1, shape: 'slime', color: '#ff8a4c',
+    drops: [['essence', 0.5], ['herb', 0.2], ['potion_hp', 0.1], ['enh_stone', 0.1]], gearChance: 0.05,
+  },
+  wild_wolf: {
+    name: 'หมาป่าทุ่ง', level: 8, hp: 170, atk: 15, def: 4, exp: 70, gold: [10, 16], respawn: 14,
+    aggro: 6.5, range: 1.6, cd: 1.1, speed: 3.2, size: 1.1, shape: 'wolf', color: '#c9a36b',
+    drops: [['wolf_fang', 0.6], ['potion_hp', 0.15], ['enh_stone', 0.15]], gearChance: 0.08,
+  },
+  frost_golem: {
+    name: 'โกเลมน้ำแข็ง', level: 14, hp: 460, atk: 28, def: 14, exp: 210, gold: [28, 44], respawn: 26,
+    aggro: 7, range: 2.0, cd: 1.9, speed: 1.5, size: 1.5, shape: 'golem', color: '#8fe3ff',
+    drops: [['crystal_ore', 0.8], ['potion_hp', 0.3], ['enh_stone', 0.4]], gearChance: 0.22,
+  },
+  gold_golem: {
+    name: 'โกเลมทองคำ', level: 22, hp: 760, atk: 40, def: 22, exp: 360, gold: [45, 70], respawn: 30,
+    aggro: 7.5, range: 2.1, cd: 1.8, speed: 1.6, size: 1.6, shape: 'golem', color: '#ffd166',
+    drops: [['crystal_ore', 0.9], ['potion_hp', 0.35], ['enh_stone', 0.5]], gearChance: 0.28,
+  },
   golem: {
     name: 'โกเลมลาวา', level: 9, hp: 280, atk: 19, def: 9, exp: 110, gold: [18, 30], respawn: 24,
     aggro: 7, range: 2.0, cd: 2.0, speed: 1.4, size: 1.5, shape: 'golem', color: '#ff6a3d',
@@ -142,12 +162,20 @@ export const MONSTERS = {
 export const MAPS = {
   town: { name: 'ดินแดนสวรรค์', levelText: 'เมืองหลัก', minLevel: 1, safe: true, sky: '#bfe9ff' },
   forest: {
-    name: 'ป่าวิญญาณ', levelText: 'เลเวล 1-6', minLevel: 1, size: 36, biome: 'forest', sky: '#c8f0e0',
+    name: 'ป่าวิญญาณ', levelText: 'เลเวล 1-5', minLevel: 1, size: 36, biome: 'forest', sky: '#c8f0e0',
     spawns: [['slime', 9], ['wolf', 4]],
   },
+  meadow: {
+    name: 'ทุ่งแสงทอง', levelText: 'เลเวล 5-10', minLevel: 5, size: 36, biome: 'meadow', sky: '#fff0c2',
+    spawns: [['fire_slime', 8], ['wild_wolf', 4]],
+  },
   mine: {
-    name: 'เหมืองลาวาร้อน', levelText: 'เลเวล 8-14', minLevel: 8, size: 36, biome: 'mine', sky: '#3a1d1d',
-    spawns: [['golem', 5], ['wolf', 2]],
+    name: 'เหมืองลาวาร้อน', levelText: 'เลเวล 10-20', minLevel: 10, size: 36, biome: 'mine', sky: '#3a1d1d',
+    spawns: [['golem', 4], ['frost_golem', 4]],
+  },
+  ruin: {
+    name: 'ซากปรักสวรรค์', levelText: 'เลเวล 20-30', minLevel: 20, size: 36, biome: 'ruin', sky: '#e8dcff',
+    spawns: [['gold_golem', 6], ['frost_golem', 2]],
   },
 };
 
@@ -156,9 +184,17 @@ export const PORTALS = {
   town: [{ x: 0, z: -17.5, to: 'forest', arrive: [0, -13], label: 'ป่าวิญญาณ' }],
   forest: [
     { x: 0, z: -16.5, to: 'town', arrive: [0, -14], label: 'ดินแดนสวรรค์' },
+    { x: 16.5, z: 0, to: 'meadow', arrive: [-13, 0], label: 'ทุ่งแสงทอง' },
+  ],
+  meadow: [
+    { x: -16.5, z: 0, to: 'forest', arrive: [13, 0], label: 'ป่าวิญญาณ' },
     { x: 16.5, z: 0, to: 'mine', arrive: [-13, 0], label: 'เหมืองลาวาร้อน' },
   ],
-  mine: [{ x: -16.5, z: 0, to: 'forest', arrive: [13, 0], label: 'ป่าวิญญาณ' }],
+  mine: [
+    { x: -16.5, z: 0, to: 'meadow', arrive: [13, 0], label: 'ทุ่งแสงทอง' },
+    { x: 16.5, z: 0, to: 'ruin', arrive: [-13, 0], label: 'ซากปรักสวรรค์' },
+  ],
+  ruin: [{ x: -16.5, z: 0, to: 'mine', arrive: [13, 0], label: 'เหมืองลาวาร้อน' }],
 };
 
 export const NPCS = {
@@ -166,6 +202,11 @@ export const NPCS = {
     name: 'ผู้อาวุโส อาเธอร์', role: 'ผู้ดูแลหมู่บ้าน', map: 'town', pos: [-4, 2],
     look: { gender: 'male', classId: 'priest', appearance: { hairStyle: 5, hair: '#f0f0f0', top: { style: 0, color: '#8a6cff' } } },
     greet: 'ดินแดนนี้กำลังสั่นคลอน... เจ้าอาจเป็นผู้ที่ช่วยเราได้',
+  },
+  jobmaster: {
+    name: 'ครูฝึก มาร์ธา', role: 'ครูฝึกอาชีพ', map: 'town', pos: [-4, -4],
+    look: { gender: 'female', classId: 'mage', appearance: { hairStyle: 2, hair: '#5b3ca8', top: { style: 1, color: '#ffb84d' } } },
+    greet: 'เมื่อถึงเลเวล 20 เจ้าจะเลือกเส้นทางอาชีพได้ ระวังไว้ว่าเลือกแล้วเปลี่ยนไม่ได้',
   },
   smith: {
     name: 'ช่างตีเหล็ก บอริส', role: 'ช่างตีเหล็ก', map: 'town', pos: [4, 2],

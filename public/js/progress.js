@@ -1,5 +1,5 @@
 import { MATERIALS, GEAR, AFFIXES, GRADES, BANDS, GEAR_SLOTS, CRAFT_WEIGHTS, ENH_RATE, MAX_ENH, ENH_DOWN_FROM, MAPS, QUESTS, ITEMS } from './data.js';
-import { SKILL_BY_ID, BUILTIN_SKILLS, MAX_RANK, skillsOfClass } from './skills.js';
+import { SKILL_BY_ID, BUILTIN_SKILLS, MAX_RANK, skillsOfClass, SKILL_TREE, JOB_LEVEL, JOB_NAMES } from './skills.js';
 
 // Pure progression rules (no DOM, no three.js), so they can be unit tested.
 // Save format v4: gear has level bands, six grades and seven equipment slots.
@@ -19,7 +19,7 @@ export function newProgress(classId = 'swordsman') {
     mats: { potion_hp: 3 }, gear: [],
     equip: Object.fromEntries(GEAR_SLOTS.map((s) => [s, null])),
     skills: {}, hotbar: [null, null, null, null, null, null],
-    quests: {}, map: 'town', pos: null,
+    quests: {}, map: 'town', pos: null, job: null,
   };
   const first = skillsOfClass(classId).find((s) => s.tier === 1);
   if (first) {
@@ -91,6 +91,7 @@ export function normalize(raw, classId = 'swordsman') {
     mats, gear, equip, skills, hotbar, quests,
     map: MAPS[p.map] ? p.map : 'town',
     pos: validPos(p.pos),
+    job: jobLinesOf(classId).includes(p.job) ? p.job : null,
   };
 }
 
@@ -356,11 +357,40 @@ export function canLearn(p, skillId) {
   const skill = SKILL_BY_ID[skillId];
   if (!skill) return 'ไม่รู้จักสกิลนี้';
   if (p.level < skill.reqLv) return `ต้องเลเวล ${skill.reqLv} ขึ้นไป`;
+  const jobLock = skillJobLock(p, skillId);
+  if (jobLock) return jobLock;
   if (skillPoints(p) < 1) return 'แต้มสกิลไม่พอ';
   const rank = p.skills[skillId] || 0;
   if (rank >= MAX_RANK) return 'เรียนรู้ระดับสูงสุดแล้ว';
   const prev = prevSkill(skill);
   if (prev && !p.skills[prev.id]) return `ต้องเรียนรู้ ${prev.name} ก่อน`;
+  return null;
+}
+
+// Why a skill needs a job the hero does not have, or null when it is open.
+export function skillJobLock(p, skillId) {
+  const skill = SKILL_BY_ID[skillId];
+  if (!skill || !skill.tier || skill.tier === 1) return null;
+  if (p.job === skill.line) return null;
+  return `ต้องเป็น${JOB_NAMES[skill.line]} ก่อน`;
+}
+
+// A skill can be cast when it is learned and its job (if any) is held.
+export function skillUsable(p, skillId) {
+  return !!p.skills[skillId] && !skillJobLock(p, skillId);
+}
+
+// The lines a class can choose from as its first job.
+export function jobLinesOf(classId) {
+  return (SKILL_TREE[classId] || []).map((l) => l.line);
+}
+
+// Picks the first job. Returns an error message, or null when it worked.
+export function chooseJob(p, line, classId) {
+  if (p.job) return 'เลือกอาชีพไปแล้ว เปลี่ยนไม่ได้';
+  if (p.level < JOB_LEVEL) return `ต้องถึงเลเวล ${JOB_LEVEL} ก่อน`;
+  if (!jobLinesOf(classId).includes(line)) return 'อาชีพนี้ไม่ใช่ของคลาสของคุณ';
+  p.job = line;
   return null;
 }
 
