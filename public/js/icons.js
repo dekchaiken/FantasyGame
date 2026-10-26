@@ -53,6 +53,9 @@ const P = {
   sickle: '<path d="M5 19c2-8 7-13 14-13"/><path d="M19 6v5"/><path d="M5 19l5-3"/>',
   shout: '<path d="M4 10v4h4l6 4V6L8 10z"/><path d="M18 9c1.5 1.5 1.5 4.5 0 6"/>',
   wave: '<path d="M3 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/><path d="M3 17c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/>',
+  hat: '<path d="M4 15a8 8 0 0 1 16 0z"/><path d="M3 15h18"/>',
+  ring: '<circle cx="12" cy="14" r="6"/><path d="M9 8l3-4 3 4"/>',
+  bracelet: '<ellipse cx="12" cy="12" rx="8" ry="5"/><circle cx="12" cy="12" r="1.5"/>',
   minus: '<path d="M5 12h14"/>',
 };
 

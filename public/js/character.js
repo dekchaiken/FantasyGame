@@ -113,14 +113,38 @@ export function buildCharacter(input) {
 
   let actKind = null;
   let actT = 0;
+  let auraRainbow = false;
+  const auraMat = new THREE.MeshBasicMaterial({ color: '#ffffff', transparent: true, opacity: 0.45, depthWrite: false, side: THREE.DoubleSide });
+  const aura = new THREE.Mesh(new THREE.RingGeometry(0.35, 0.62, 40), auraMat);
+  aura.rotation.x = -Math.PI / 2;
+  aura.position.y = 0.03;
+  aura.visible = false;
+  root.add(aura);
   return {
     group: root,
     // swaps the weapon model (gear line) in the right hand
-    setWeapon(shape, color) {
+    setWeapon(shape, color, grade = 0) {
       arms[1].remove(weapon);
       weapon.traverse((o) => o.geometry?.dispose());
       weapon = buildWeapon(shape, color, std(color));
+      weapon.scale.setScalar(1 + 0.06 * grade);
       arms[1].add(weapon);
+    },
+    // A glowing ring under the feet. color null hides it; rainbow cycles hues (top grade).
+    setAura(color, rainbow = false) {
+      auraRainbow = rainbow;
+      if (!color) {
+        aura.visible = false;
+        return;
+      }
+      aura.visible = true;
+      auraMat.color.set(color);
+    },
+    // Tints the clothes: { top, bottom, shoes } colours.
+    setLook(c = {}) {
+      if (c.top) topM.color.set(c.top);
+      if (c.bottom) bottomM.color.set(c.bottom);
+      if (c.shoes) shoeM.color.set(c.shoes);
     },
     // Plays a short action pose on top of the idle/walk cycle: 'swing' (basic attack), 'cast' (skill), 'heal'.
     act(kind) {
@@ -141,6 +165,12 @@ export function buildCharacter(input) {
       arms[1].rotation.x = sw * 0.6 - idle;
       head.rotation.y = Math.sin(t * 0.7) * 0.05;
       hairGroup.rotation.x = Math.sin(t * 3) * 0.02;
+      if (aura.visible) {
+        const pulse = 0.8 + 0.2 * Math.sin(t * 4);
+        aura.scale.setScalar(pulse);
+        aura.material.opacity = 0.35 + 0.15 * Math.sin(t * 4);
+        if (auraRainbow) auraMat.color.setHSL((t * 0.25) % 1, 0.9, 0.6);
+      }
       if (actKind) {
         actT += dt;
         const dur = actKind === 'swing' ? 0.36 : actKind === 'cast' ? 0.7 : 0.9;

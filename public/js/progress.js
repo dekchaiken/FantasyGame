@@ -1,26 +1,26 @@
-import { MATERIALS, GEAR, AFFIXES, OPTION_COUNT, ENH_RATE, MAX_ENH, ENH_DOWN_FROM, MAPS, QUESTS, ITEMS } from './data.js';
+import { MATERIALS, GEAR, AFFIXES, GRADES, BANDS, GEAR_SLOTS, CRAFT_WEIGHTS, ENH_RATE, MAX_ENH, ENH_DOWN_FROM, MAPS, QUESTS, ITEMS } from './data.js';
 import { SKILL_BY_ID, BUILTIN_SKILLS, MAX_RANK, skillsOfClass } from './skills.js';
 
 // Pure progression rules (no DOM, no three.js), so they can be unit tested.
-// Save format v3. normalize() repairs any input and migrates v2 saves.
-export const SAVE_VERSION = 3;
+// Save format v4: gear has level bands, six grades and seven equipment slots.
+export const SAVE_VERSION = 4;
 export const MAX_LEVEL = 30;
-export const BAG_MAX = 80;
+export const BAG_MAX = 120;
 export const SKILL_POINTS_PER_LEVEL = 2;
 
 export const expToNext = (lv) => Math.round(60 * Math.pow(lv, 1.4));
 
-// v2 item ids that became gear, mapped to the new base ids.
-const LEGACY_GEAR = { sword_iron: 'blade_1', sword_flame: 'blade_2', armor_leaf: 'light_0', armor_golem: 'heavy_1' };
+// v2 item ids that became gear, mapped to v4 base ids.
+const LEGACY_GEAR = { sword_iron: 'blade_0_1', sword_flame: 'blade_1_2', armor_leaf: 'shirt_0_0', armor_golem: 'shirt_1_2' };
 
 export function newProgress(classId = 'swordsman') {
   const p = {
     v: SAVE_VERSION, level: 1, exp: 0, gold: 0,
-    mats: { potion_hp: 3 }, gear: [], equip: { weapon: null, armor: null },
+    mats: { potion_hp: 3 }, gear: [],
+    equip: Object.fromEntries(GEAR_SLOTS.map((s) => [s, null])),
     skills: {}, hotbar: [null, null, null, null, null, null],
     quests: {}, map: 'town', pos: null,
   };
-  // every class starts with the first tier of its first line
   const first = skillsOfClass(classId).find((s) => s.tier === 1);
   if (first) {
     p.skills[first.id] = 1;
@@ -42,11 +42,10 @@ function cleanGear(g) {
   return { uid: g.uid, base: g.base, enh: int(g.enh, 0, MAX_ENH, 0), opts };
 }
 
-// Repairs any input into a valid progress object. Unknown ids are dropped.
+// Repairs any input into a valid progress object. Unknown ids are dropped; older formats are migrated.
 export function normalize(raw, classId = 'swordsman') {
   const p = raw && typeof raw === 'object' ? raw : {};
-  const fresh = newProgress(classId);
-  if (p.v !== SAVE_VERSION) return migrateV2(p, fresh);
+  if (p.v !== SAVE_VERSION && !p.mats) return migrateV2(p, classId);
 
   const mats = {};
   for (const [id, n] of Object.entries(p.mats || {})) {
@@ -61,8 +60,8 @@ export function normalize(raw, classId = 'swordsman') {
       gear.push(c);
     }
   }
-  const equip = { weapon: null, armor: null };
-  for (const slot of ['weapon', 'armor']) {
+  const equip = Object.fromEntries(GEAR_SLOTS.map((s) => [s, null]));
+  for (const slot of GEAR_SLOTS) {
     const uid = p.equip?.[slot];
     const g = gear.find((x) => x.uid === uid);
     if (g && GEAR[g.base].slot === slot) equip[slot] = uid;
@@ -95,47 +94,48 @@ export function normalize(raw, classId = 'swordsman') {
   };
 }
 
-// v2 kept potions and materials in `inv` and equipment as plain item ids. Convert it.
-function migrateV2(p, fresh) {
-  const out = normalize({ ...fresh, v: SAVE_VERSION, gear: [], equip: { weapon: null, armor: null }, skills: fresh.skills, hotbar: fresh.hotbar }, 'swordsman');
-  const rng = Math.random;
+// v2 kept potions and materials in `inv` and equipment as plain item ids.
+function migrateV2(p, classId) {
+  const out = normalize({ v: SAVE_VERSION, mats: {}, gear: [], equip: {}, skills: {}, hotbar: [], quests: p.quests }, classId);
+  const fresh = newProgress(classId);
+  out.skills = fresh.skills;
+  out.hotbar = fresh.hotbar;
   out.level = int(p.level, 1, MAX_LEVEL, 1);
   out.exp = int(p.exp, 0, 1e9, 0);
   out.gold = int(p.gold, 0, 1e9, 0);
   out.map = MAPS[p.map] ? p.map : 'town';
   out.pos = validPos(p.pos);
-  out.quests = normalize({ v: SAVE_VERSION, quests: p.quests }).quests;
   for (const [id, n] of Object.entries(p.inv || {})) {
     if (MATERIALS[id] && Number.isInteger(n) && n > 0) out.mats[id] = Math.min(999, n);
     else if (LEGACY_GEAR[id] && Number.isInteger(n)) {
-      for (let i = 0; i < Math.min(n, 20); i++) out.gear.push(makeGear(LEGACY_GEAR[id], rng));
+      for (let i = 0; i < Math.min(n, 20); i++) out.gear.push(makeGear(LEGACY_GEAR[id]));
     }
   }
   for (const slot of ['weapon', 'armor']) {
     const legacy = p.equip?.[slot];
     if (LEGACY_GEAR[legacy]) {
-      const g = makeGear(LEGACY_GEAR[legacy], rng);
+      const g = makeGear(LEGACY_GEAR[legacy]);
       out.gear.push(g);
-      out.equip[slot] = g.uid;
+      out.equip[GEAR[g.base].slot] = g.uid;
     }
   }
   return out;
 }
 
-// Derived combat stats from level, equipped gear and gear options.
+// Derived combat stats from level, equipped gear (all slots) and gear options.
 export function statsFor(p) {
   const mods = { atk: 0, hp: 0, mp: 0, crit: 0, critdmg: 0, skillmg: 0, cdr: 0, exp: 0, gold: 0 };
   let wAtk = 0;
   let aDef = 0;
   let aHp = 0;
-  for (const slot of ['weapon', 'armor']) {
+  for (const slot of GEAR_SLOTS) {
     const g = findGear(p, p.equip[slot]);
     if (!g) continue;
     const base = GEAR[g.base];
     const m = 1 + 0.07 * g.enh;
     if (base.atk) wAtk += base.atk * m;
     if (base.def) aDef += base.def * m;
-    aHp += base.hp || 0;
+    aHp += (base.hp || 0) * m;
     for (const o of g.opts) mods[o.k] = (mods[o.k] || 0) + o.v;
   }
   return {
@@ -161,44 +161,93 @@ function uidFrom(rng) {
   return 'g' + Math.floor(rng() * 36 ** 6).toString(36).padStart(5, '0') + Math.floor(rng() * 1296).toString(36);
 }
 
-// A piece of gear of a given base, with random options for its tier.
+// Magnitude of options: higher bands and grades roll bigger numbers.
+export function bandMult(band) {
+  return 1 + band * 0.6;
+}
+
+// A piece of gear of a given base id (`${line}_${band}_${grade}`), with random options for its grade.
 export function makeGear(baseId, rng = Math.random) {
   const base = GEAR[baseId];
-  const [min, max] = OPTION_COUNT[base.tier];
+  const grade = GRADES[base.grade];
+  const [min, max] = grade.opts;
   const count = min + Math.floor(rng() * (max - min + 1));
   const pool = [...AFFIXES];
   const opts = [];
   for (let i = 0; i < count && pool.length; i++) {
-    const idx = Math.floor(rng() * pool.length);
-    const [af] = pool.splice(idx, 1);
-    const [lo, hi] = af.range[base.tier];
-    opts.push({ k: af.k, v: Math.round(lo + rng() * (hi - lo)) });
+    const [af] = pool.splice(Math.floor(rng() * pool.length), 1);
+    const [lo, hi] = af.base;
+    const v = (lo + rng() * (hi - lo)) * bandMult(base.band) * grade.mult;
+    opts.push({ k: af.k, v: Math.max(1, Math.round(v)) });
   }
   return { uid: uidFrom(rng), base: baseId, enh: 0, opts };
 }
 
-// Tier roll: higher monster level raises the chance of better gear.
-export function rollTier(level, rng = Math.random) {
-  const r = rng();
-  const p3 = 0.004 + level * 0.002;
-  const p2 = p3 + 0.03 + level * 0.006;
-  const p1 = p2 + 0.25 + level * 0.01;
-  if (r < p3) return 3;
-  if (r < p2) return 2;
-  if (r < p1) return 1;
-  return 0;
+// Weighted pick of a grade index.
+export function rollGrade(weights, rng = Math.random) {
+  const total = weights.reduce((a, b) => a + b, 0);
+  let r = rng() * total;
+  for (let g = 0; g < weights.length; g++) {
+    r -= weights[g];
+    if (r < 0) return g;
+  }
+  return weights.length - 1;
 }
 
-// Random gear drop for a class: 60% weapon of that class's lines, 40% armour.
-export function rollDrop(classId, monsterLevel, rng = Math.random) {
-  const slot = rng() < 0.6 ? 'weapon' : 'armor';
-  const tier = rollTier(monsterLevel, rng);
-  return rollGearOf(slot, tier, classId, rng);
+// Drop band: the band of the hero's level, sometimes one lower.
+export function dropBand(heroLevel, rng = Math.random) {
+  let b = Math.min(BANDS.length - 1, Math.max(0, Math.floor(heroLevel / 5) - 1));
+  if (b > 0 && rng() < 0.25) b--;
+  return b;
 }
 
-export function rollGearOf(slot, tier, classId, rng = Math.random) {
-  const ids = Object.keys(GEAR).filter((id) => GEAR[id].slot === slot && GEAR[id].tier === tier && (slot === 'armor' || GEAR[id].classId === classId));
-  return makeGear(ids[Math.floor(rng() * ids.length)], rng);
+// Random gear drop for a class: 60% weapon of one of its two lines, 40% a random armour slot.
+export function rollDrop(classId, heroLevel, rng = Math.random) {
+  const band = dropBand(heroLevel, rng);
+  const grade = rollGrade(GRADES.map((g) => g.weight), rng);
+  let baseId;
+  if (rng() < 0.6) {
+    const lines = [...new Set(Object.values(GEAR).filter((g) => g.slot === 'weapon' && g.classId === classId).map((g) => g.line))];
+    baseId = `${lines[Math.floor(rng() * lines.length)]}_${band}_${grade}`;
+  } else {
+    const slots = GEAR_SLOTS.slice(1);
+    baseId = `${slots[Math.floor(rng() * slots.length)]}_${band}_${grade}`;
+  }
+  return makeGear(baseId, rng);
+}
+
+// Gear from a fixed slot / band / grade (quest rewards). Weapons use the hero's class lines.
+export function rollGearOf(slot, band, grade, classId, rng = Math.random) {
+  if (slot === 'weapon') {
+    const lines = [...new Set(Object.values(GEAR).filter((g) => g.slot === 'weapon' && g.classId === classId).map((g) => g.line))];
+    return makeGear(`${lines[Math.floor(rng() * lines.length)]}_${band}_${grade}`, rng);
+  }
+  return makeGear(`${slot}_${band}_${grade}`, rng);
+}
+
+// ---------- crafting (smith) ----------
+export function craftCost(band) {
+  return { gold: Math.round(40 * Math.pow(band + 1, 1.5)), mats: { essence: 2 + band * 2, wolf_fang: band + 1, crystal_ore: band } };
+}
+
+// Returns { gear } or { error }.
+export function craftGear(p, line, band, classId, rng = Math.random) {
+  if (band < 0 || band >= BANDS.length) return { error: 'ไม่มีชุดระดับนี้' };
+  if (p.level < BANDS[band].level) return { error: `ต้องเลเวล ${BANDS[band].level} ขึ้นไป` };
+  const weapon = Object.values(GEAR).some((g) => g.slot === 'weapon' && g.line === line && g.classId === classId);
+  if (!weapon) return { error: 'สายอาวุธนี้ไม่ใช่สายของอาชีพคุณ' };
+  if (p.gear.length >= BAG_MAX) return { error: 'กระเป๋าเต็ม' };
+  const cost = craftCost(band);
+  if (p.gold < cost.gold) return { error: `ต้องใช้ ${cost.gold} เหรียญ` };
+  for (const [id, n] of Object.entries(cost.mats)) {
+    if ((p.mats[id] || 0) < n) return { error: `ต้องใช้ ${MATERIALS[id].name} ${n} ชิ้น` };
+  }
+  p.gold -= cost.gold;
+  for (const [id, n] of Object.entries(cost.mats)) removeMat(p, id, n);
+  const grade = rollGrade(CRAFT_WEIGHTS, rng);
+  const gear = makeGear(`${line}_${band}_${grade}`, rng);
+  p.gear.push(gear);
+  return { gear };
 }
 
 export function addGear(p, g) {
@@ -213,6 +262,7 @@ export function equipGear(p, uid, classId) {
   if (!g) return 'ไม่พบไอเท็ม';
   const base = GEAR[g.base];
   if (base.slot === 'weapon' && base.classId !== classId) return 'อาวุธนี้ไม่ใช่สายอาชีพของคุณ';
+  if (p.level < base.level) return `ต้องเลเวล ${base.level} ขึ้นไปจึงจะใส่ได้`;
   p.equip[base.slot] = uid;
   return null;
 }
@@ -222,13 +272,14 @@ export function unequip(p, slot) {
 }
 
 export function sellPrice(g) {
-  return Math.round([40, 120, 300, 800][GEAR[g.base].tier] * (1 + 0.25 * g.enh));
+  const base = GEAR[g.base];
+  return Math.round((30 + base.band * 40) * GRADES[base.grade].mult * (1 + 0.25 * g.enh));
 }
 
-// Returns the gold gained, or null when the item cannot be sold.
+// Returns the gold gained, or null when the item cannot be sold (or is equipped).
 export function sellGear(p, uid) {
   const g = findGear(p, uid);
-  if (!g || p.equip.weapon === uid || p.equip.armor === uid) return null;
+  if (!g || GEAR_SLOTS.some((s) => p.equip[s] === uid)) return null;
   const price = sellPrice(g);
   p.gear = p.gear.filter((x) => x !== g);
   p.gold += price;
@@ -334,7 +385,7 @@ export function setHotbar(p, slot, skillId) {
 }
 
 // ---------- quests ----------
-// Returns the reward lines to show as toasts. rng and classId are used for gear rewards.
+// Returns reward lines to show as toasts.
 export function grantReward(p, questId, classId = 'swordsman', rng = Math.random) {
   const r = QUESTS[questId].reward;
   const lines = [];
@@ -346,8 +397,8 @@ export function grantReward(p, questId, classId = 'swordsman', rng = Math.random
     lines.push(`ได้รับ ${ITEMS[id].name} x${n}`);
   }
   if (r.gear) {
-    const g = rollGearOf(r.gear.slot, r.gear.tier, classId, rng);
-    if (addGear(p, g)) lines.push(`ได้รับ ${ITEMS[g.base].name} (${g.opts.length} ออฟชั่น)`);
+    const g = rollGearOf(r.gear.slot, r.gear.band, r.gear.grade, classId, rng);
+    if (addGear(p, g)) lines.push(`ได้รับ ${ITEMS[g.base].name} (${GRADES[GEAR[g.base].grade].name})`);
   }
   if (levels) lines.push(`เลเวลอัป! ตอนนี้เลเวล ${p.level}`);
   return lines;
@@ -402,7 +453,6 @@ export function applyEvent(p, ev, classId = 'swordsman', rng = Math.random) {
   return msgs;
 }
 
-// Progress text for kill and collect steps, e.g. "2/5".
 export function stepProgressText(p, questId) {
   const step = currentStep(p, questId);
   const q = p.quests[questId];
@@ -415,8 +465,17 @@ export function mapUnlocked(p, mapId) {
   return p.level >= MAPS[mapId].minLevel;
 }
 
-// Short label for a gear piece's options, e.g. "พลังโจมตี +7 · คริติคอล +2%".
 export function optionLabel(o) {
   const a = AFFIXES.find((x) => x.k === o.k);
   return `${a.label} +${o.v}${a.pct ? '%' : ''}`;
+}
+
+// Grade of the strongest equipped piece (drives the aura).
+export function topGrade(p) {
+  let best = -1;
+  for (const slot of GEAR_SLOTS) {
+    const g = findGear(p, p.equip[slot]);
+    if (g) best = Math.max(best, GEAR[g.base].grade);
+  }
+  return best;
 }

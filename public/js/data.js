@@ -11,82 +11,108 @@ export const TIER_NAME = ['ทั่วไป', 'หายาก', 'มหาก
 
 // Stackable materials and potions. Counted in progress.mats.
 export const MATERIALS = {
-  potion_hp: { name: 'ยาฟื้นพลังชีวิต', type: 'potion', rarity: 'common', icon: 'potion', heal: 90, price: 20 },
-  essence: { name: 'แก่นพลังสไลม์', type: 'material', rarity: 'common', icon: 'gem', price: 6 },
-  herb: { name: 'สมุนไพรป่า', type: 'material', rarity: 'common', icon: 'leaf', price: 4 },
-  wolf_fang: { name: 'เขี้ยวหมาป่า', type: 'material', rarity: 'common', icon: 'fang', price: 8 },
-  crystal_ore: { name: 'แร่คริสตัลลาวา', type: 'material', rarity: 'rare', icon: 'ore', price: 40 },
-  enh_stone: { name: 'หินเสริมพลัง', type: 'material', rarity: 'rare', icon: 'gem', price: 40 },
+  potion_hp: { name: 'ยาฟื้นพลังชีวิต', type: 'potion', rarity: 'common', icon: 'potion', heal: 90, price: 20 , cat: 'potion' },
+  essence: { name: 'แก่นพลังสไลม์', type: 'material', rarity: 'common', icon: 'gem', price: 6 , cat: 'quest' },
+  herb: { name: 'สมุนไพรป่า', type: 'material', rarity: 'common', icon: 'leaf', price: 4 , cat: 'quest' },
+  wolf_fang: { name: 'เขี้ยวหมาป่า', type: 'material', rarity: 'common', icon: 'fang', price: 8 , cat: 'craft' },
+  crystal_ore: { name: 'แร่คริสตัลลาวา', type: 'material', rarity: 'rare', icon: 'ore', price: 40 , cat: 'craft' },
+  enh_stone: { name: 'หินเสริมพลัง', type: 'material', rarity: 'rare', icon: 'gem', price: 40 , cat: 'upgrade' },
 };
 
-// Gear lines. Weapons belong to one class; armour fits every class.
-// Each line has four tiers (common -> legendary), so a weapon's line and tier are its identity.
-const TIER_ATK = [10, 20, 34, 52];
-const TIER_DEF = [5, 11, 18, 28];
-const TIER_HP = [20, 50, 90, 140];
+// Level bands: every 5 levels there is a full set of gear, with six grades in each band.
+export const BANDS = [
+  { level: 5, name: 'ฝึกหัด' },
+  { level: 10, name: 'ชำนาญ' },
+  { level: 15, name: 'นักรบ' },
+  { level: 20, name: 'วีรบุรุษ' },
+  { level: 25, name: 'ราชา' },
+  { level: 30, name: 'เทพ' },
+];
+// Grades. weight = drop chance weight, opts = [min, max] random options, aura = glow colour.
+export const GRADES = [
+  { name: 'ธรรมดา', color: '#aab4c8', mult: 1, opts: [0, 1], aura: null, weight: 45, epithet: '' },
+  { name: 'พื้นฐาน', color: '#e8f1ff', mult: 1.25, opts: [1, 1], aura: '#ffffff', weight: 25, epithet: 'อย่างดี' },
+  { name: 'หายาก', color: '#4fa3ff', mult: 1.6, opts: [1, 2], aura: '#4fa3ff', weight: 15, epithet: 'ชั้นเยี่ยม' },
+  { name: 'แรร์', color: '#b77bff', mult: 2.0, opts: [2, 3], aura: '#b77bff', weight: 9, epithet: 'ชั้นวิเศษ' },
+  { name: 'ตำนาน', color: '#ffb84d', mult: 2.6, opts: [3, 4], aura: '#ffb84d', weight: 5, epithet: 'แห่งตำนาน' },
+  { name: 'ขั้นสุด', color: '#ff5d73', mult: 3.4, opts: [4, 4], aura: 'rainbow', weight: 1, epithet: 'ขั้นสุด' },
+];
+export const GRADE_COLOR = GRADES.map((g) => g.color);
+
+// Crafted gear never comes out as common.
+export const CRAFT_WEIGHTS = [0, 30, 26, 18, 16, 7, 3];
+
+// Equipment slots. Weapons belong to one class line; the rest fit everyone.
+export const GEAR_SLOTS = ['weapon', 'hat', 'shirt', 'pants', 'shoes', 'ring', 'bracelet'];
+export const ARMOR_SLOTS = GEAR_SLOTS.slice(1);
+export const SLOT_NAME = { weapon: 'อาวุธ', hat: 'หมวก', shirt: 'เสื้อ', pants: 'กางเกง', shoes: 'รองเท้า', ring: 'แหวน', bracelet: 'กำไล' };
+const SLOT_NOUN = { hat: 'หมวก', shirt: 'เสื้อ', pants: 'กางเกง', shoes: 'รองเท้า', ring: 'แหวน', bracelet: 'กำไล' };
+const SLOT_ICON = { hat: 'hat', shirt: 'shirt', pants: 'pants', shoes: 'shoe', ring: 'ring', bracelet: 'bracelet' };
+
+// Weapon lines: two per class.
 const WEAPON_LINES = {
   swordsman: [
-    { line: 'blade', shape: 'sword', color: '#cfd8e3', icon: 'sword', names: ['ดาบสนิม', 'ดาบเหล็กกล้า', 'ดาบเปลวเพลิง', 'ดาบรุ่งอรุณ'], fx: { type: 'slash', color: '#ffd166', color2: '#ffffff' } },
-    { line: 'axe', shape: 'axe', color: '#9aa5b1', icon: 'axe', names: ['ขวานไม้', 'ขวานหินโกเลม', 'ขวานปฐพี', 'ขวานมหาภัย'], fx: { type: 'wave', color: '#ff8a5c', color2: '#ffe0a3' } },
+    { line: 'blade', noun: 'ดาบ', shape: 'sword', color: '#cfd8e3', icon: 'sword', fx: { type: 'slash', color: '#ffd166', color2: '#ffffff' } },
+    { line: 'axe', noun: 'ขวาน', shape: 'axe', color: '#9aa5b1', icon: 'axe', fx: { type: 'wave', color: '#ff8a5c', color2: '#ffe0a3' } },
   ],
   assassin: [
-    { line: 'dagger', shape: 'dagger', color: '#c9d6e8', icon: 'dagger', names: ['มีดสั้นเหล็ก', 'มีดพิษงู', 'มีดเงาคืนชีพ', 'มีดสายลมดำ'], fx: { type: 'slash', color: '#9b8cff', color2: '#ffffff' } },
-    { line: 'sickle', shape: 'sickle', color: '#8fd8ff', icon: 'sickle', names: ['เคียวชาวนา', 'เคียวจันทรา', 'เคียวเงาดำ', 'เคียวแห่งความตาย'], fx: { type: 'slash', color: '#5ee7ff', color2: '#ffffff' } },
+    { line: 'dagger', noun: 'มีดสั้น', shape: 'dagger', color: '#c9d6e8', icon: 'dagger', fx: { type: 'slash', color: '#9b8cff', color2: '#ffffff' } },
+    { line: 'sickle', noun: 'เคียว', shape: 'sickle', color: '#8fd8ff', icon: 'sickle', fx: { type: 'slash', color: '#5ee7ff', color2: '#ffffff' } },
   ],
   mage: [
-    { line: 'staff', shape: 'staff', color: '#8a5a32', icon: 'staff', names: ['คทาไม้ก่อ', 'คทาไฟ', 'คทาเพลิงนรก', 'คทาดวงอาทิตย์'], fx: { type: 'projectile', color: '#ff7a1a', color2: '#ffe27a' } },
-    { line: 'crystal', shape: 'crystal', color: '#7fd8ff', icon: 'gem', names: ['คทาคริสตัลฟ้า', 'คทาน้ำแข็ง', 'คทาหิมะนิรันดร์', 'คทาหัวใจแช่แข็ง'], fx: { type: 'projectile', color: '#7fd8ff', color2: '#ffffff' } },
+    { line: 'staff', noun: 'คทาไม้', shape: 'staff', color: '#8a5a32', icon: 'staff', fx: { type: 'projectile', color: '#ff7a1a', color2: '#ffe27a' } },
+    { line: 'crystal', noun: 'คทาคริสตัล', shape: 'crystal', color: '#7fd8ff', icon: 'gem', fx: { type: 'projectile', color: '#7fd8ff', color2: '#ffffff' } },
   ],
   priest: [
-    { line: 'book', shape: 'book', color: '#c0392b', icon: 'book', names: ['คัมภีร์เก่า', 'คัมภีร์แสง', 'คัมภีร์นักบุญ', 'คัมภีร์แห่งสวรรค์'], fx: { type: 'burst', color: '#fff3a3', color2: '#ffffff' } },
-    { line: 'lantern', shape: 'lantern', color: '#ffd166', icon: 'sparkle', names: ['ตะเกียงทองแดง', 'ตะเกียงศักดิ์สิทธิ์', 'ตะเกียงดวงดาว', 'ตะเกียงรุ่งอรุณ'], fx: { type: 'burst', color: '#7dff9b', color2: '#ffffff' } },
+    { line: 'book', noun: 'คัมภีร์', shape: 'book', color: '#c0392b', icon: 'book', fx: { type: 'burst', color: '#fff3a3', color2: '#ffffff' } },
+    { line: 'lantern', noun: 'ตะเกียง', shape: 'lantern', color: '#ffd166', icon: 'sparkle', fx: { type: 'burst', color: '#7dff9b', color2: '#ffffff' } },
   ],
 };
-const ARMOR_LINES = [
-  { line: 'light', color: '#8a6a4a', names: ['เสื้อหนัง', 'เสื้อหนังรัดกุม', 'เสื้อหนังเงา', 'เสื้อหนังนาคา'] },
-  { line: 'heavy', color: '#9aa5b1', names: ['เกราะเหล็ก', 'เกราะโกเลม', 'เกราะปฐพี', 'เกราะอัศวิน'] },
-  { line: 'robe', color: '#7b5cc7', names: ['ชุดคลุมฝึกหัด', 'ชุดคลุมจันทรา', 'ชุดคลุมดาว', 'ชุดคลุมเทพ'] },
-];
+const ARMOR_ICON_BY_SLOT = SLOT_ICON;
 
-// GEAR[id] = base item. id is `${line}_${tier}`.
+// Base stats per band (grade multiplies them).
+const BAND_ATK = [12, 28, 50, 80, 120, 170];
+const BAND_DEF = [6, 14, 24, 38, 56, 80];
+const BAND_HP = [20, 50, 90, 140, 200, 270];
+
 export const GEAR = {};
 for (const [classId, lines] of Object.entries(WEAPON_LINES)) {
   for (const L of lines) {
-    L.names.forEach((name, tier) => {
-      GEAR[`${L.line}_${tier}`] = {
-        name, slot: 'weapon', classId, line: L.line, tier, rarity: TIER_RARITY[tier], atk: TIER_ATK[tier],
+    BANDS.forEach((band, b) => GRADES.forEach((gr, g) => {
+      GEAR[`${L.line}_${b}_${g}`] = {
+        name: `${L.noun}${band.name}`, epithet: gr.epithet, slot: 'weapon', classId, line: L.line, band: b, grade: g,
+        level: band.level, rarity: GRADES[g].name, gcolor: gr.color, atk: Math.round(BAND_ATK[b] * gr.mult),
         shape: L.shape, color: L.color, icon: L.icon, fx: L.fx,
       };
-    });
+    }));
   }
 }
-for (const L of ARMOR_LINES) {
-  L.names.forEach((name, tier) => {
-    GEAR[`${L.line}_${tier}`] = {
-      name, slot: 'armor', line: L.line, tier, rarity: TIER_RARITY[tier], def: TIER_DEF[tier], hp: TIER_HP[tier],
-      color: L.color, icon: 'armor',
+for (const slot of ARMOR_SLOTS) {
+  BANDS.forEach((band, b) => GRADES.forEach((gr, g) => {
+    GEAR[`${slot}_${b}_${g}`] = {
+      name: `${SLOT_NOUN[slot]}${band.name}`, epithet: gr.epithet, slot, line: slot, band: b, grade: g,
+      level: band.level, rarity: GRADES[g].name, gcolor: gr.color,
+      def: Math.round(BAND_DEF[b] * gr.mult), hp: Math.round(BAND_HP[b] * gr.mult), color: gr.color, icon: ARMOR_ICON_BY_SLOT[slot],
     };
-  });
+  }));
 }
-export const WEAPON_LINE_NAMES = Object.fromEntries(Object.values(WEAPON_LINES).flat().map((L) => [L.line, L.names[0]]));
+export const WEAPON_LINE_IDS = Object.values(WEAPON_LINES).flat().map((L) => L.line);
 
 // Items shown in lookups (materials and gear together).
 export const ITEMS = { ...MATERIALS, ...GEAR };
 
 // Random options rolled on gear. range[tier] is [min, max]. pct options are percentage points.
 export const AFFIXES = [
-  { k: 'atk', label: 'พลังโจมตี', pct: false, range: [[3, 5], [5, 9], [9, 14], [14, 22]] },
-  { k: 'hp', label: 'HP สูงสุด', pct: false, range: [[15, 25], [25, 45], [45, 70], [70, 110]] },
-  { k: 'mp', label: 'MP สูงสุด', pct: false, range: [[8, 12], [12, 20], [20, 30], [30, 45]] },
-  { k: 'crit', label: 'โอกาสคริติคอล', pct: true, range: [[1, 2], [2, 3], [3, 4], [4, 6]] },
-  { k: 'critdmg', label: 'ดาเมจคริติคอล', pct: true, range: [[5, 10], [10, 18], [18, 28], [28, 40]] },
-  { k: 'skillmg', label: 'ดาเมจสกิล', pct: true, range: [[3, 6], [6, 10], [10, 16], [16, 24]] },
-  { k: 'cdr', label: 'ลดคูลดาวน์', pct: true, range: [[2, 4], [4, 7], [7, 10], [10, 14]] },
-  { k: 'exp', label: 'EXP เพิ่ม', pct: true, range: [[3, 6], [6, 10], [10, 15], [15, 22]] },
-  { k: 'gold', label: 'เหรียญเพิ่ม', pct: true, range: [[5, 10], [10, 18], [18, 28], [28, 40]] },
+  { k: 'atk', label: 'พลังโจมตี', pct: false, base: [3, 5] },
+  { k: 'hp', label: 'HP สูงสุด', pct: false, base: [15, 25] },
+  { k: 'mp', label: 'MP สูงสุด', pct: false, base: [8, 12] },
+  { k: 'crit', label: 'โอกาสคริติคอล', pct: true, base: [1, 2] },
+  { k: 'critdmg', label: 'ดาเมจคริติคอล', pct: true, base: [5, 10] },
+  { k: 'skillmg', label: 'ดาเมจสกิล', pct: true, base: [3, 6] },
+  { k: 'cdr', label: 'ลดคูลดาวน์', pct: true, base: [2, 4] },
+  { k: 'exp', label: 'EXP เพิ่ม', pct: true, base: [3, 6] },
+  { k: 'gold', label: 'เหรียญเพิ่ม', pct: true, base: [5, 10] },
 ];
-// How many options each tier rolls: [min, max].
-export const OPTION_COUNT = [[0, 1], [1, 2], [2, 3], [3, 4]];
 
 // Enhancement: success rate per target level, gold cost and stones needed.
 export const ENH_RATE = [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.6, 0.5, 0.4, 0.3, 0.2, 0.15, 0.1, 0.06, 0.04, 0.02];
@@ -164,7 +190,7 @@ export const NPCS = {
 };
 
 // Quest steps: talk (npc), kill (monster, optional map), collect (item), visit (map).
-// reward.gear = { slot, tier } rolls a random piece of gear for the hero's class.
+// reward.gear = { slot, band, grade } gives a random piece of that band and grade.
 export const QUESTS = {
   main_1: {
     title: 'เจตนารมณ์แห่งสวรรค์', giver: 'elder', minLevel: 1,
@@ -176,7 +202,7 @@ export const QUESTS = {
       { type: 'kill', monster: 'golem', map: 'mine', count: 3, text: 'ปราบโกเลมลาวา 3 ตัวในเหมือง' },
       { type: 'talk', npc: 'elder', text: 'รายงานผลต่อผู้อาวุโส อาเธอร์' },
     ],
-    reward: { exp: 600, gold: 200, gear: { slot: 'weapon', tier: 1 } },
+    reward: { exp: 600, gold: 200, gear: { slot: 'weapon', band: 0, grade: 1 } },
   },
   side_wolf: {
     title: 'หมาป่าที่ไม่หลับ', giver: 'hunter', minLevel: 3,
@@ -185,7 +211,7 @@ export const QUESTS = {
       { type: 'kill', monster: 'wolf', map: 'forest', count: 4, text: 'ล่าหมาป่าเงา 4 ตัว' },
       { type: 'talk', npc: 'hunter', text: 'กลับไปรายงานนายพราน' },
     ],
-    reward: { exp: 250, gold: 80, gear: { slot: 'armor', tier: 0 } },
+    reward: { exp: 250, gold: 80, gear: { slot: 'shirt', band: 0, grade: 0 } },
   },
   side_herb: {
     title: 'ยาของหมู่บ้าน', giver: 'healer', minLevel: 2,

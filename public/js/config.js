@@ -65,8 +65,7 @@ export function fullAppearance(a = {}) {
 export const DEFAULT_SKILLS = Object.fromEntries(Object.keys(CLASSES).map((c) => [c, skillsOfClass(c)]));
 
 export const HUD_MENUS = [
-  { id: 'inventory', icon: 'bag', label: 'กระเป๋า', key: 'I' },
-  { id: 'equip', icon: 'shield', label: 'อุปกรณ์', key: 'O' },
+  { id: 'inventory', icon: 'bag', label: 'กระเป๋า/ชุด', key: 'I' },
   { id: 'skills', icon: 'star', label: 'สกิล', key: 'K' },
   { id: 'quests', icon: 'scroll', label: 'ภารกิจ', key: 'J' },
   { id: 'map', icon: 'map', label: 'แผนที่', key: 'M' },

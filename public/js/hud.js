@@ -55,6 +55,9 @@ export const Hud = {
         case 'potion': g.usePotion('potion_hp'); break;
         case 'skill': g.useSkill(Number(d.key)); break;
         case 'equip': g.equip(d.uid); break;
+        case 'cat': this.windowData.cat = d.cat; this.windowData.sel = null; this.refresh(g); break;
+        case 'select': this.windowData.sel = d.uid; this.refresh(g); break;
+        case 'craft': g.craft(d.line, Number(d.band)); break;
         case 'unequip': g.unequip(d.slot); break;
         case 'enhance': g.enhance(d.uid); break;
         case 'sell': g.sell(d.uid); break;
@@ -107,15 +110,14 @@ export const Hud = {
     const p = g.p;
     const kind = this.windowKind;
     const titles = {
-      inventory: 'กระเป๋า', equip: 'อุปกรณ์และตีบวก', skills: 'สกิล', quests: 'ภารกิจ', map: 'แผนที่', status: 'ตัวละคร',
+      inventory: 'กระเป๋าและชุดของคุณ', skills: 'สกิล', quests: 'ภารกิจ', map: 'แผนที่', status: 'ตัวละคร',
       npc: NPCS[this.windowData.npcId]?.name || '',
     };
     const menu = HUD_MENUS.find((m) => m.id === kind);
     $('window-title').innerHTML = `${icon(menu?.icon || 'chat')}<span>${esc(titles[kind] || '')}</span>`;
     let html = '';
 
-    if (kind === 'inventory') html = inventoryHtml(g);
-    else if (kind === 'equip') html = equipHtml(g);
+    if (kind === 'inventory') html = bagHtml(g, this);
     else if (kind === 'skills') html = skillsHtml(g);
     else if (kind === 'quests') html = questsHtml(g, this);
     else if (kind === 'map') html = mapHtml(g);
@@ -129,6 +131,10 @@ export const Hud = {
     if (kind === 'status') {
       const c = document.getElementById('status-thumb');
       if (c) drawThumb(c.getContext('2d'), g.character, 0, 0, 180, 180);
+    }
+    if (kind === 'inventory') {
+      const c = document.getElementById('bag-thumb');
+      if (c) drawThumb(c.getContext('2d'), g.character, 0, 0, c.width, c.height);
     }
     void p;
   },
@@ -331,82 +337,156 @@ export const Hud = {
 // ---------- window content ----------
 function gearLabel(g) {
   const base = GEAR[g.base];
-  return `${esc(base.name)}${g.enh ? ` <b class="enh">+${g.enh}</b>` : ''}`;
+  return `${esc(base.name)} <i class="gname" style="color:${base.gcolor}">${esc(base.epithet)}</i>${g.enh ? ` <b class="enh">+${g.enh}</b>` : ''}`;
 }
 
 function optionsHtml(g) {
   return g.opts.map((o) => `<li>${esc(P.optionLabel(o))}</li>`).join('') || '<li class="muted">ไม่มีออฟชั่นเสริม</li>';
 }
 
-function inventoryHtml(g) {
+const CATS = [
+  { id: 'weapon', label: 'อาวุธ', icon: 'sword' },
+  { id: 'armor', label: 'ชุด', icon: 'shirt' },
+  { id: 'acc', label: 'เครื่องประดับ', icon: 'ring' },
+  { id: 'quest', label: 'ของภารกิจ', icon: 'scroll' },
+  { id: 'craft', label: 'วัสดุคราฟ', icon: 'ore' },
+  { id: 'upgrade', label: 'อัปเกรด', icon: 'gem' },
+  { id: 'potion', label: 'ยา', icon: 'potion' },
+];
+const ARMOR_SLOT_CATS = ['hat', 'shirt', 'pants', 'shoes'];
+const ACC_SLOT_CATS = ['ring', 'bracelet'];
+const SLOT_ICON = { weapon: 'sword', hat: 'hat', shirt: 'shirt', pants: 'pants', shoes: 'shoe', ring: 'ring', bracelet: 'bracelet' };
+const SLOT_LABEL = { weapon: 'อาวุธ', hat: 'หมวก', shirt: 'เสื้อ', pants: 'กางเกง', shoes: 'รองเท้า', ring: 'แหวน', bracelet: 'กำไล' };
+
+// Items in one bag category: gear as [uid, item] and materials as ['mat:id', item].
+function itemsInCat(g, cat) {
   const p = g.p;
-  const mats = Object.entries(p.mats);
-  let html = `<div class="row-meta"><span>${icon('coin')} ${fmt(p.gold)} เหรียญ</span><span>อุปกรณ์ ${p.gear.length}/${P.BAG_MAX}</span></div>`;
-  html += '<div class="sub-title">วัสดุและยา</div>';
-  html += mats.length
-    ? `<div class="mat-row">${mats.map(([id, n]) => {
-      const it = MATERIALS[id];
-      const act = it.type === 'potion' ? `data-act="use" data-id="${id}"` : '';
-      return `<button class="mat" ${act} style="--rc:${RARITY[it.rarity].color}" title="${esc(it.name)}">${icon(it.icon)}<span>${esc(it.name)}</span><b>x${n}</b></button>`;
-    }).join('')}</div>`
-    : '<div class="empty">ยังไม่มีวัสดุ</div>';
-  html += '<div class="sub-title">อุปกรณ์</div>';
-  if (!p.gear.length) return html + '<div class="empty">ยังไม่มีอุปกรณ์ ออกล่ามอนสเตอร์เพื่อหาของ</div>';
-  html += p.gear.map((item) => {
-    const base = GEAR[item.base];
-    const equipped = p.equip.weapon === item.uid || p.equip.armor === item.uid;
-    const canEquip = base.slot === 'armor' || base.classId === g.character.classId;
-    return `<div class="gear-row" style="--rc:${RARITY[base.rarity].color}">
-      <div class="gear-ico">${icon(base.icon)}</div>
-      <div class="gear-info"><b>${gearLabel(item)}</b><small>${base.slot === 'weapon' ? 'อาวุธ' : 'ชุดเกราะ'} · ${RARITY[base.rarity].label}${base.classId && base.classId !== g.character.classId ? ' · ของสายอาชีพอื่น' : ''}</small><ul>${optionsHtml(item)}</ul></div>
-      <div class="gear-act">
-        ${equipped ? '<span class="tag">สวมใส่อยู่</span>' : canEquip ? `<button class="btn-primary sm" data-act="equip" data-uid="${item.uid}">สวมใส่</button>` : ''}
-        ${equipped ? '' : `<button class="btn-ghost sm" data-act="sell" data-uid="${item.uid}">ขาย</button>`}
-      </div></div>`;
-  }).join('');
-  return html;
+  if (cat === 'weapon') return p.gear.filter((x) => GEAR[x.base].slot === 'weapon').map((x) => ({ key: x.uid, gear: x }));
+  if (cat === 'armor') return p.gear.filter((x) => ARMOR_SLOT_CATS.includes(GEAR[x.base].slot)).map((x) => ({ key: x.uid, gear: x }));
+  if (cat === 'acc') return p.gear.filter((x) => ACC_SLOT_CATS.includes(GEAR[x.base].slot)).map((x) => ({ key: x.uid, gear: x }));
+  const mat = { quest: 'quest', craft: 'craft', upgrade: 'upgrade', potion: 'potion' }[cat];
+  return Object.entries(p.mats).filter(([id]) => MATERIALS[id].cat === mat).map(([id, n]) => ({ key: 'mat:' + id, mat: id, count: n }));
 }
 
-function equipHtml(g) {
+function bagHtml(g, hud) {
   const p = g.p;
-  const s = g.stats;
-  let html = '<div class="slots">';
-  for (const slot of ['weapon', 'armor']) {
+  const cat = hud.windowData.cat || 'weapon';
+  const sel = hud.windowData.sel;
+  const doll = (slot) => {
     const item = P.findGear(p, p.equip[slot]);
-    html += `<div class="slot-card${item ? '' : ' empty'}" style="--rc:${item ? RARITY[GEAR[item.base].rarity].color : 'var(--line)'}">
-      <div class="slot-ico">${icon(item ? GEAR[item.base].icon : slot === 'weapon' ? 'sword' : 'armor')}</div>
-      <div class="slot-info"><b>${slot === 'weapon' ? 'อาวุธ' : 'ชุดเกราะ'}</b>
-        <small>${item ? gearLabel(item) : 'ยังไม่ได้สวมใส่'}</small>
-        ${item ? `<ul>${optionsHtml(item)}</ul>` : ''}
-        ${item ? `<button class="btn-ghost sm" data-act="unequip" data-slot="${slot}">ถอด</button>` : ''}
-      </div></div>`;
-  }
-  html += '</div>';
-  html += `<div class="stat-list">${statRow('พลังโจมตี', s.atk)}${statRow('ป้องกัน', s.def)}${statRow('HP สูงสุด', s.maxHp)}${statRow('MP สูงสุด', s.maxMp)}${statRow('คริติคอล', s.crit + '%')}${statRow('ดาเมจคริ', s.critDmg + '%')}${statRow('ดาเมจสกิล', '+' + s.skillMg + '%')}${statRow('ลดคูลดาวน์', s.cdr + '%')}</div>`;
+    const color = item ? GEAR[item.base].gcolor : 'rgba(120,170,255,0.25)';
+    return `<button class="doll-slot${item ? ' filled' : ''}" style="--gc:${color}" ${item ? `data-act="unequip" data-slot="${slot}"` : 'disabled'} title="${SLOT_LABEL[slot]}">
+      <span class="doll-ico">${icon(item ? GEAR[item.base].icon : SLOT_ICON[slot])}</span>
+      <small>${item ? esc(GEAR[item.base].name) : SLOT_LABEL[slot]}</small>${item ? `<em>${item.enh ? '+' + item.enh : ''}</em>` : ''}</button>`;
+  };
+  const dollSlots = [['weapon', 'hat'], ['shirt', 'ring'], ['pants', 'bracelet'], ['shoes']];
+  const dollHtml = dollSlots.map((row) => `<div class="doll-row">${row.map(doll).join('')}</div>`).join('');
+  const stats = g.stats;
+  const mini = `<div class="mini-stats"><span>ATK <b>${fmt(stats.atk)}</b></span><span>DEF <b>${fmt(stats.def)}</b></span><span>HP <b>${fmt(stats.maxHp)}</b></span><span>MP <b>${fmt(stats.maxMp)}</b></span></div>`;
 
-  // enhancement for the equipped pieces
-  html += '<div class="sub-title">ตีบวก</div>';
-  const equipped = ['weapon', 'armor'].map((slot) => P.findGear(p, p.equip[slot])).filter(Boolean);
-  if (!equipped.length) return html + '<div class="empty">สวมใส่อุปกรณ์ก่อนจึงจะตีบวกได้</div>';
-  for (const item of equipped) {
-    const cost = P.enhCost(item.enh);
-    const stones = P.enhStones(item.enh);
-    const rate = Math.round(enhRate(item.enh) * 100);
-    const max = item.enh >= 15;
-    html += `<div class="enh-card">
-      <div class="enh-head"><b>${gearLabel(item)}</b><span>${max ? 'ขีดสุด' : `เป้าหมาย +${item.enh + 1} · โอกาส ${rate}%`}</span></div>
-      ${max ? '' : `<div class="enh-cost">${icon('coin')} ${fmt(cost)} · ${icon('gem')} หินเสริมพลัง ${stones} (มี ${p.mats.enh_stone || 0})</div>
-      ${item.enh + 1 > 7 ? '<div class="warn-note">ล้มเหลวที่ +7 ขึ้นไปจะลดระดับ 1 ขั้น</div>' : ''}
-      <button class="btn-primary" data-act="enhance" data-uid="${item.uid}">ตีบวก</button>`}
-    </div>`;
+  const tabs = CATS.map((c) => `<button class="cat${cat === c.id ? ' on' : ''}" data-act="cat" data-cat="${c.id}" title="${c.label}">${icon(c.icon)}<span>${c.label}</span></button>`).join('');
+  const items = itemsInCat(g, cat);
+  const grid = items.length ? items.map((it) => {
+    if (it.gear) {
+      const base = GEAR[it.gear.base];
+      const eq = GEAR_SLOTS_EQUIPPED(p, it.gear.uid);
+      return `<button class="bag-item${sel === it.key ? ' sel' : ''}${eq ? ' eq' : ''}" style="--gc:${base.gcolor}" data-act="select" data-uid="${it.key}">
+        <span class="bi-ico">${icon(base.icon)}</span>${it.gear.enh ? `<em>+${it.gear.enh}</em>` : ''}${eq ? '<i class="eq-dot"></i>' : ''}<small>${esc(base.name)}</small></button>`;
+    }
+    const m = MATERIALS[it.mat];
+    return `<button class="bag-item mat${sel === it.key ? ' sel' : ''}" style="--gc:${RARITY[m.rarity].color}" data-act="select" data-uid="${it.key}">
+      <span class="bi-ico">${icon(m.icon)}</span><b class="cnt">x${it.count}</b><small>${esc(m.name)}</small></button>`;
+  }).join('') : '<div class="empty bag-empty">ไม่มีรายการในหมวดนี้</div>';
+
+  // detail panel for the selected item
+  let detail = '<div class="detail-empty">เลือกไอเท็มเพื่อดูรายละเอียด</div>';
+  if (sel && sel.startsWith('mat:')) {
+    const id = sel.slice(4);
+    const m = MATERIALS[id];
+    if (p.mats[id]) {
+      const act = m.type === 'potion' ? `<button class="btn-primary" data-act="use" data-id="${id}">ใช้ (+${m.heal} HP)</button>` : '';
+      detail = `<div class="detail-head"><span class="di" style="color:${RARITY[m.rarity].color}">${icon(m.icon)}</span><div><b>${esc(m.name)}</b><small>${RARITY[m.rarity].label} · จำนวน ${p.mats[id]}</small></div></div>${act}`;
+    }
+  } else if (sel) {
+    const item = P.findGear(p, sel);
+    if (item) detail = gearDetail(g, item);
   }
-  return html;
+
+  return `<div class="bag-top">
+      <div class="doll-panel glass-in">
+        <div class="doll-thumb"><canvas id="bag-thumb" width="160" height="160"></canvas></div>
+        <div class="doll">${dollHtml}</div>
+        ${mini}
+      </div>
+      <div class="bag-main">
+        <div class="cats">${tabs}</div>
+        <div class="bag-grid">${grid}</div>
+        <div class="bag-foot"><span>${icon('coin')} ${fmt(p.gold)}</span><span>อุปกรณ์ ${p.gear.length}/${P.BAG_MAX}</span></div>
+      </div>
+    </div>
+    <div class="detail">${detail}</div>`;
+}
+
+function GEAR_SLOTS_EQUIPPED(p, uid) {
+  return Object.values(p.equip).includes(uid);
+}
+
+function gearDetail(g, item) {
+  const p = g.p;
+  const base = GEAR[item.base];
+  const eq = GEAR_SLOTS_EQUIPPED(p, item.uid);
+  const allowed = base.slot !== 'weapon' || base.classId === g.character.classId;
+  const lvOk = p.level >= base.level;
+  const cost = P.enhCost(item.enh);
+  const stones = P.enhStones(item.enh);
+  const rate = Math.round(enhRate(item.enh) * 100);
+  const stats = base.atk ? `พลังโจมตี ${base.atk}` : `ป้องกัน ${base.def} · HP ${base.hp}`;
+  const btns = [];
+  if (eq) btns.push(`<button class="btn-ghost sm" data-act="unequip" data-slot="${base.slot}">ถอด</button>`);
+  else if (allowed) btns.push(`<button class="btn-primary sm" data-act="equip" data-uid="${item.uid}" ${lvOk ? '' : 'disabled'}>${lvOk ? 'ใส่' : `ต้องเลเวล ${base.level}`}</button>`);
+  if (!eq) btns.push(`<button class="btn-ghost sm" data-act="sell" data-uid="${item.uid}">ขาย</button>`);
+  const enh = item.enh >= 15 ? '<small>ตีบวกถึงขีดสุด</small>'
+    : `<div class="enh-line"><span>ตีบวก +${item.enh + 1} · โอกาส ${rate}%</span><span>${icon('coin')} ${fmt(cost)} · ${icon('gem')} ${stones} (มี ${p.mats.enh_stone || 0})</span>
+      <button class="btn-primary sm" data-act="enhance" data-uid="${item.uid}">ตีบวก</button></div>`;
+  return `<div class="detail-head"><span class="di" style="color:${base.gcolor}">${icon(base.icon)}</span>
+      <div><b>${gearLabel(item)}</b><small>${SLOT_LABEL[base.slot] || 'อาวุธ'} · ${GRADES_NAME(base.grade)} · ต้องเลเวล ${base.level} · ${stats}${base.classId ? ' · ' + (base.classId === g.character.classId ? 'สายของคุณ' : 'ของสายอาชีพอื่น') : ''}</small>
+      <ul class="opts">${optionsHtml(item)}</ul></div></div>
+    <div class="detail-actions">${btns.join('')}</div>${enh}`;
+}
+
+function GRADES_NAME(i) {
+  return ['ธรรมดา', 'พื้นฐาน', 'หายาก', 'แรร์', 'ตำนาน', 'ขั้นสุด'][i];
 }
 
 // Mirrors the rate table in data.js so the UI can show it.
 function enhRate(enh) {
   return [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.6, 0.5, 0.4, 0.3, 0.2, 0.15, 0.1, 0.06, 0.04, 0.02][enh + 1] ?? 0;
 }
+
+// Smith window: craft weapons of the hero's class lines for every band the hero has reached.
+function craftHtml(g) {
+  const p = g.p;
+  const lines = [...new Set(Object.values(GEAR).filter((x) => x.slot === 'weapon' && x.classId === g.character.classId).map((x) => x.line))];
+  const names = Object.fromEntries(Object.values(GEAR).filter((x) => x.slot === 'weapon').map((x) => [x.line, x.name.replace(BANDS_NAMES_RE, '')]));
+  let html = '<div class="sub-title">คราฟอาวุธ (ตามเลเวลและสายอาชีพ)</div><div class="craft-list">';
+  BANDS_LIST.forEach((band, b) => {
+    const ok = p.level >= band.level;
+    const cost = P.craftCost(b);
+    const mats = Object.entries(cost.mats).map(([id, n]) => `${MATERIALS[id].name} ${n}`).join(' · ');
+    html += `<div class="craft-band${ok ? '' : ' locked'}"><div class="cb-head"><b>${band.name}</b><small>เลเวล ${band.level}</small></div>`;
+    html += `<div class="cb-cost">${icon('coin')} ${fmt(cost.gold)} · ${mats}</div>`;
+    html += '<div class="cb-lines">' + lines.map((line) => ok
+      ? `<button class="btn-primary sm" data-act="craft" data-line="${line}" data-band="${b}">${names[line]}</button>`
+      : `<span class="tag lock">${icon('lock')} ${names[line]}</span>`).join('') + '</div></div>';
+  });
+  return html + '</div>';
+}
+
+const BANDS_LIST = [
+  { level: 5, name: 'ฝึกหัด' }, { level: 10, name: 'ชำนาญ' }, { level: 15, name: 'นักรบ' },
+  { level: 20, name: 'วีรบุรุษ' }, { level: 25, name: 'ราชา' }, { level: 30, name: 'เทพ' },
+];
+const BANDS_NAMES_RE = /(ฝึกหัด|ชำนาญ|นักรบ|วีรบุรุษ|ราชา|เทพ)$/;
 
 function skillsHtml(g) {
   const p = g.p;
@@ -517,6 +597,7 @@ function npcHtml(g, npcId) {
       return `<button class="shop-item" data-act="buy" data-id="${id}" style="--rc:${RARITY[it.rarity].color}">${icon(it.icon)}<span>${esc(it.name)}</span><b>${icon('coin')} ${it.price}</b></button>`;
     }).join('')}</div>`;
   }
+  if (npcId === 'smith') html += craftHtml(g);
   html += `<div class="row-meta"><span>${icon('coin')} ${fmt(p.gold)} เหรียญ</span><button class="btn-ghost sm" data-act="talk" data-npc="${npcId}">คุยต่อ</button></div>`;
   return html;
 }

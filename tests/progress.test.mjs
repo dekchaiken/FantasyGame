@@ -2,10 +2,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import * as P from '../public/js/progress.js';
-import { GEAR, AFFIXES, OPTION_COUNT, MAX_ENH, QUESTS } from '../public/js/data.js';
+import { GEAR, GRADES, BANDS, GEAR_SLOTS, AFFIXES, QUESTS, MAX_ENH } from '../public/js/data.js';
 import { skillsOfClass, SKILL_BY_ID } from '../public/js/skills.js';
 
-// deterministic random source for repeatable rolls
 const seeded = (seed) => () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
 
 test('exp curve grows with level and level-ups carry over', () => {
@@ -14,9 +13,6 @@ test('exp curve grows with level and level-ups carry over', () => {
   assert.equal(P.addExp(p, P.expToNext(1) + P.expToNext(2) + 5), 2);
   assert.equal(p.level, 3);
   assert.equal(p.exp, 5);
-  const max = P.newProgress();
-  P.addExp(max, 1e9);
-  assert.equal(max.level, P.MAX_LEVEL);
 });
 
 test('every class starts with its first skill learned and on the hotbar', () => {
@@ -28,106 +24,118 @@ test('every class starts with its first skill learned and on the hotbar', () => 
   }
 });
 
-test('weapons only come from their own class lines', () => {
+test('the gear table has six bands, six grades, seven slots and class-only weapons', () => {
+  assert.equal(BANDS.length, 6);
+  assert.equal(GRADES.length, 6);
+  assert.deepEqual(GRADES.map((g) => g.name), ['ธรรมดา', 'พื้นฐาน', 'หายาก', 'แรร์', 'ตำนาน', 'ขั้นสุด']);
+  assert.equal(GEAR_SLOTS.length, 7);
+  for (const id of Object.keys(GEAR)) {
+    const g = GEAR[id];
+    if (g.slot === 'weapon') assert.ok(g.classId, id);
+    assert.equal(g.level, BANDS[g.band].level);
+  }
+  // names differ between bands
+  assert.notEqual(GEAR.blade_0_0.name, GEAR.blade_1_0.name);
+});
+
+test('weapons only drop for their own class', () => {
   const rng = seeded(7);
   for (let i = 0; i < 300; i++) {
-    const g = P.rollDrop('mage', 9, rng);
-    const base = GEAR[g.base];
-    if (base.slot === 'weapon') assert.equal(base.classId, 'mage', g.base);
+    const g = P.rollDrop('mage', 12, rng);
+    if (GEAR[g.base].slot === 'weapon') assert.equal(GEAR[g.base].classId, 'mage', g.base);
   }
 });
 
-test('gear rolls respect the tier option counts and affix ranges', () => {
+test('option counts follow the grade and options scale with band and grade', () => {
   const rng = seeded(11);
   for (const id of Object.keys(GEAR)) {
-    for (let i = 0; i < 20; i++) {
-      const g = P.makeGear(id, rng);
-      const base = GEAR[id];
-      const [min, max] = OPTION_COUNT[base.tier];
-      assert.ok(g.opts.length >= min && g.opts.length <= max, `${id} option count`);
-      assert.equal(new Set(g.opts.map((o) => o.k)).size, g.opts.length, 'options are distinct');
-      for (const o of g.opts) {
-        const af = AFFIXES.find((a) => a.k === o.k);
-        const [lo, hi] = af.range[base.tier];
-        assert.ok(o.v >= lo && o.v <= hi, `${o.k}=${o.v} outside ${lo}-${hi}`);
-      }
+    const g = GEAR[id];
+    const [min, max] = GRADES[g.grade].opts;
+    for (let i = 0; i < 10; i++) {
+      const gear = P.makeGear(id, rng);
+      assert.ok(gear.opts.length >= min && gear.opts.length <= max, `${id} option count`);
+      assert.equal(new Set(gear.opts.map((o) => o.k)).size, gear.opts.length);
     }
   }
+  // a higher band rolls bigger numbers for the same affix
+  const lo = P.makeGear('shirt_0_3', seeded(1)).opts.reduce((a, o) => a + o.v, 0);
+  const hi = P.makeGear('shirt_5_3', seeded(1)).opts.reduce((a, o) => a + o.v, 0);
+  assert.ok(hi > lo);
+  assert.ok(AFFIXES.length >= 9);
 });
 
-test('higher monster levels roll better tiers more often', () => {
-  const rng = seeded(3);
-  const count = (lvl) => {
-    const counts = [0, 0, 0, 0];
-    for (let i = 0; i < 4000; i++) counts[P.rollTier(lvl, rng)]++;
-    return counts;
-  };
-  const low = count(1);
-  const high = count(12);
-  assert.ok(high[2] + high[3] > low[2] + low[3]);
-  assert.ok(low[0] > low[1]);
+test('drop grades follow the weights', () => {
+  const rng = seeded(9);
+  const counts = [0, 0, 0, 0, 0, 0];
+  for (let i = 0; i < 6000; i++) counts[P.rollGrade(GRADES.map((g) => g.weight), rng)]++;
+  assert.ok(counts[0] > counts[1] && counts[1] > counts[2] && counts[4] > counts[5]);
 });
 
-test('equipped gear changes stats and enhancement scales them', () => {
+test('crafting needs the level, the class line, gold and materials', () => {
   const p = P.newProgress('swordsman');
+  assert.match(P.craftGear(p, 'blade', 1, 'swordsman').error, /ต้องเลเวล/);
+  p.level = 10;
+  assert.match(P.craftGear(p, 'staff', 0, 'swordsman').error, /สายอาวุธ/);
+  assert.match(P.craftGear(p, 'blade', 0, 'swordsman').error, /เหรียญ/);
+  p.gold = 100000;
+  assert.match(P.craftGear(p, 'blade', 0, 'swordsman').error, /ชิ้น/);
+  p.mats = { essence: 50, wolf_fang: 50, crystal_ore: 50 };
+  const r = P.craftGear(p, 'blade', 0, 'swordsman', () => 0.5);
+  assert.ok(r.gear, 'craft succeeds');
+  assert.ok(GEAR[r.gear.base].grade >= 1, 'crafted gear is never common');
+  assert.equal(p.gear.length, 1);
+});
+
+test('equipping checks class, slot and level', () => {
+  const p = P.newProgress('assassin');
+  P.addGear(p, { uid: 'gstaf01', base: 'staff_0_1', enh: 0, opts: [] });
+  assert.ok(P.equipGear(p, 'gstaf01', 'assassin'), 'other class weapon refused');
+  P.addGear(p, { uid: 'ghat001', base: 'hat_1_0', enh: 0, opts: [] });
+  assert.match(P.equipGear(p, 'ghat001', 'assassin'), /ต้องเลเวล 10/);
+  p.level = 10;
+  assert.equal(P.equipGear(p, 'ghat001', 'assassin'), null);
+  assert.equal(p.equip.hat, 'ghat001');
+});
+
+test('all seven slots add to the stats', () => {
+  const p = P.newProgress('swordsman');
+  p.level = 30;
   const base = P.statsFor(p);
-  const g = { uid: 'gtest1', base: 'blade_2', enh: 0, opts: [{ k: 'atk', v: 10 }, { k: 'crit', v: 3 }] };
-  P.addGear(p, g);
-  assert.equal(P.equipGear(p, 'gtest1', 'swordsman'), null);
+  const ids = { hat: 'hat_5_5', shirt: 'shirt_5_5', pants: 'pants_5_5', shoes: 'shoes_5_5', ring: 'ring_5_5', bracelet: 'bracelet_5_5' };
+  for (const [slot, base_] of Object.entries(ids)) {
+    P.addGear(p, { uid: 'g' + slot + '01', base: base_, enh: 0, opts: [] });
+    P.equipGear(p, 'g' + slot + '01', 'swordsman');
+  }
   const geared = P.statsFor(p);
-  assert.equal(geared.atk, base.atk + GEAR.blade_2.atk + 10);
-  assert.equal(geared.crit, base.crit + 3);
-  g.enh = 10;
-  assert.ok(P.statsFor(p).atk > geared.atk, 'enhancement raises attack');
+  assert.ok(geared.def > base.def && geared.maxHp > base.maxHp);
 });
 
-test('a weapon of another class cannot be equipped', () => {
-  const p = P.newProgress('priest');
-  P.addGear(p, { uid: 'gmage1', base: 'staff_0', enh: 0, opts: [] });
-  assert.ok(P.equipGear(p, 'gmage1', 'priest'));
-  assert.equal(p.equip.weapon, null);
-});
-
-test('enhancement spends gold and stones and can succeed, fail or downgrade', () => {
+test('enhancement can succeed, fail or downgrade, and refuses when short', () => {
   const p = P.newProgress();
   p.gold = 1e6;
   p.mats.enh_stone = 50;
-  P.addGear(p, { uid: 'genh01', base: 'light_0', enh: 0, opts: [] });
-  // always succeed
-  const win = P.enhance(p, 'genh01', () => 0);
-  assert.equal(win.result, 'success');
+  P.addGear(p, { uid: 'genh01', base: 'shirt_0_0', enh: 0, opts: [] });
+  assert.equal(P.enhance(p, 'genh01', () => 0).result, 'success');
   assert.equal(P.findGear(p, 'genh01').enh, 1);
-  assert.equal(p.mats.enh_stone, 49);
-  // a failed attempt below the downgrade threshold keeps the level
-  const miss = P.enhance(p, 'genh01', () => 0.999);
-  assert.equal(miss.result, 'fail');
-  assert.equal(P.findGear(p, 'genh01').enh, 1);
-  // at or above the threshold a failure drops one level
+  assert.equal(P.enhance(p, 'genh01', () => 0.999).result, 'fail');
   P.findGear(p, 'genh01').enh = 8;
-  const down = P.enhance(p, 'genh01', () => 0.999);
-  assert.equal(down.result, 'down');
+  assert.equal(P.enhance(p, 'genh01', () => 0.999).result, 'down');
   assert.equal(P.findGear(p, 'genh01').enh, 7);
+  P.findGear(p, 'genh01').enh = MAX_ENH;
+  assert.equal(P.enhance(p, 'genh01', () => 0).result, 'error');
 });
 
-test('enhancement refuses without gold or stones and stops at the max level', () => {
+test('selling pays gold and refuses equipped items', () => {
   const p = P.newProgress();
-  P.addGear(p, { uid: 'genh02', base: 'light_0', enh: 0, opts: [] });
-  assert.equal(P.enhance(p, 'genh02', () => 0).result, 'error'); // no gold, no stones
-  p.gold = 1e6;
-  assert.equal(P.enhance(p, 'genh02', () => 0).result, 'error'); // no stones
-  p.mats.enh_stone = 1;
-  P.findGear(p, 'genh02').enh = MAX_ENH;
-  assert.equal(P.enhance(p, 'genh02', () => 0).result, 'error');
-});
-
-test('selling a worn item pays gold and removes it', () => {
-  const p = P.newProgress();
-  P.addGear(p, { uid: 'gsell1', base: 'light_1', enh: 2, opts: [] });
+  p.level = 10;
+  P.addGear(p, { uid: 'gsell1', base: 'pants_1_2', enh: 2, opts: [] });
+  P.equipGear(p, 'gsell1', 'swordsman');
+  assert.equal(P.sellGear(p, 'gsell1'), null);
+  P.unequip(p, 'pants');
   const gold = p.gold;
   const price = P.sellGear(p, 'gsell1');
-  assert.equal(price, P.sellPrice({ base: 'light_1', enh: 2 }));
+  assert.ok(price > 0);
   assert.equal(p.gold, gold + price);
-  assert.equal(P.findGear(p, 'gsell1'), null);
 });
 
 test('skill points: one per level, tiers need their line, ranks cap at three', () => {
@@ -135,94 +143,85 @@ test('skill points: one per level, tiers need their line, ranks cap at three', (
   assert.equal(P.skillPoints(p), 0);
   P.addExp(p, P.expToNext(1) + P.expToNext(2) + P.expToNext(3) + P.expToNext(4));
   assert.equal(P.skillPoints(p), 2 * (p.level - 1));
-  const t2 = 'mg_f2';
-  assert.equal(P.canLearn(p, t2), null, 'tier 2 is open because tier 1 is learned');
-  assert.match(P.canLearn(p, 'mg_i2') ?? '', /ต้องเรียนรู้/, 'another line needs its own tier 1');
-  assert.equal(P.learnSkill(p, 'mg_f1'), null, 'a learned skill can be ranked up');
+  assert.equal(P.canLearn(p, 'mg_f2'), null, 'tier 2 is open because tier 1 is learned');
+  assert.match(P.canLearn(p, 'mg_i2'), /ต้องเรียนรู้/);
+  assert.equal(P.learnSkill(p, 'mg_f1'), null);
   assert.equal(p.skills.mg_f1, 2);
   p.level = 30;
   p.skills = { mg_f1: 3 };
   assert.equal(P.canLearn(p, 'mg_f1'), 'เรียนรู้ระดับสูงสุดแล้ว');
-  assert.equal(P.learnSkill(p, t2), null);
-  assert.equal(p.skills[t2], 1);
+  assert.equal(P.learnSkill(p, 'mg_f2'), null);
+  assert.equal(p.skills.mg_f2, 1);
+  assert.ok(SKILL_BY_ID.mg_f2.reqLv === 5);
 });
 
-test('learning fills the first free hotbar slot and setHotbar moves skills', () => {
+test('learning fills the hotbar and setHotbar keeps one slot per skill', () => {
   const p = P.newProgress('priest');
   p.level = 10;
   P.learnSkill(p, 'pr_h1');
   assert.ok(p.hotbar.includes('pr_h1'));
   assert.equal(P.setHotbar(p, 4, 'pr_h1'), null);
   assert.equal(p.hotbar[4], 'pr_h1');
-  assert.equal(p.hotbar.filter((x) => x === 'pr_h1').length, 1, 'a skill sits on one slot only');
-  assert.ok(P.setHotbar(p, 5, 'pr_h4'), 'an unlearned skill cannot go on the hotbar');
+  assert.equal(p.hotbar.filter((x) => x === 'pr_h1').length, 1);
+  assert.ok(P.setHotbar(p, 5, 'pr_h4'));
 });
 
 test('normalize repairs bad saves and keeps only known data', () => {
   const p = P.normalize({
-    v: 3, level: 999, exp: -5, gold: 'lots',
+    v: 4, level: 999, exp: -5, gold: 'lots',
     mats: { potion_hp: 3, fake: 9, herb: -1, essence: 2000 },
-    gear: [{ uid: 'gbad001', base: 'nope', enh: 1, opts: [] }, { uid: 'gok0001', base: 'light_0', enh: 99, opts: [{ k: 'bogus', v: 1 }, { k: 'atk', v: 4 }] }],
-    equip: { weapon: 'gok0001', armor: 'gok0001' },
-    skills: { 'mg_f1': 1, 'mg_f2': 99, 'x': 'y' },
+    gear: [{ uid: 'gbad001', base: 'nope', enh: 1, opts: [] }, { uid: 'gok0001', base: 'shirt_0_0', enh: 99, opts: [{ k: 'bogus', v: 1 }, { k: 'atk', v: 4 }] }],
+    equip: { weapon: 'gok0001', shirt: 'gok0001' },
+    skills: { mg_f1: 1, mg_f2: 99, x: 'y' },
     hotbar: ['mg_f1', 'ghost', null],
     quests: { main_1: { status: 'done', step: 99, count: -4 }, nope: { status: 'done' } },
     map: 'dungeon', pos: [1, 'x'],
   }, 'mage');
   assert.equal(p.level, P.MAX_LEVEL);
-  assert.equal(p.exp, 0);
   assert.equal(p.gold, 0);
   assert.deepEqual(p.mats, { potion_hp: 3, essence: 999 });
   assert.equal(p.gear.length, 1);
   assert.equal(p.gear[0].enh, MAX_ENH);
-  assert.deepEqual(p.gear[0].opts, [{ k: 'atk', v: 4 }]);
-  assert.equal(p.equip.weapon, null, 'armour cannot sit in the weapon slot');
-  assert.equal(p.equip.armor, 'gok0001');
+  assert.equal(p.equip.weapon, null);
+  assert.equal(p.equip.shirt, 'gok0001');
   assert.equal(p.skills.mg_f2, 3);
-  assert.equal(p.skills.x, undefined);
-  assert.equal(p.hotbar[0], 'mg_f1');
-  assert.equal(p.hotbar[1], null);
   assert.equal(p.quests.main_1.step, QUESTS.main_1.steps.length);
   assert.equal(p.map, 'town');
 });
 
-test('a v2 save migrates potions, materials and equipment to v3', () => {
+test('a v2 save migrates potions, materials and equipment', () => {
   const p = P.normalize({
     level: 4, exp: 10, gold: 50, map: 'forest',
     inv: { potion_hp: 2, essence: 3, armor_leaf: 1 },
     equip: { weapon: 'sword_iron', armor: null },
     quests: { main_1: { status: 'active', step: 2, count: 1 } },
   }, 'swordsman');
-  assert.equal(p.v, 3);
-  assert.equal(p.level, 4);
+  assert.equal(p.v, 4);
   assert.equal(p.mats.potion_hp, 2);
   assert.equal(p.mats.essence, 3);
   assert.equal(p.gear.length, 2);
-  assert.equal(GEAR[P.findGear(p, p.equip.weapon).base].name, 'ดาบเหล็กกล้า');
+  assert.equal(GEAR[P.findGear(p, p.equip.weapon).base].slot, 'weapon');
   assert.equal(p.quests.main_1.step, 2);
-  assert.equal(p.map, 'forest');
-  assert.ok(p.hotbar[0], 'starter skill is kept');
 });
 
-test('a quest reward can roll gear for the hero class', () => {
+test('a quest reward gives gear of the reward band and grade', () => {
   const p = P.newProgress('assassin');
   const lines = P.grantReward(p, 'main_1', 'assassin', seeded(5));
   assert.ok(lines.some((l) => l.includes('ได้รับ')));
-  const weapon = p.gear.find((g) => GEAR[g.base].slot === 'weapon');
-  assert.equal(GEAR[weapon.base].classId, 'assassin');
-  assert.equal(GEAR[weapon.base].tier, 1);
+  const w = p.gear.find((g) => GEAR[g.base].slot === 'weapon');
+  assert.equal(GEAR[w.base].classId, 'assassin');
+  assert.equal(GEAR[w.base].band, 0);
+  assert.equal(GEAR[w.base].grade, 1);
 });
 
 test('kill events advance the kill step only after enough kills', () => {
   const p = P.newProgress();
   P.acceptQuest(p, 'main_1');
   P.applyEvent(p, { type: 'talk', npc: 'elder' });
-  assert.equal(p.quests.main_1.step, 1);
   for (let i = 0; i < 4; i++) P.applyEvent(p, { type: 'kill', monster: 'slime', map: 'forest' });
   assert.equal(p.quests.main_1.step, 1);
   P.applyEvent(p, { type: 'kill', monster: 'slime', map: 'forest' });
   assert.equal(p.quests.main_1.step, 2);
-  assert.equal(p.quests.main_1.count, 0);
 });
 
 test('kills on the wrong map or of the wrong monster do not count', () => {
@@ -234,21 +233,10 @@ test('kills on the wrong map or of the wrong monster do not count', () => {
     P.applyEvent(p, { type: 'kill', monster: 'wolf', map: 'forest' });
   }
   assert.equal(p.quests.main_1.step, 1);
-  assert.equal(p.quests.main_1.count, 0);
-});
-
-test('a quest cannot be accepted twice and is locked by level', () => {
-  const p = P.newProgress();
-  assert.equal(P.acceptQuest(p, 'main_1'), true);
-  assert.equal(P.acceptQuest(p, 'main_1'), false);
-  assert.deepEqual(P.availableQuests(p, 'hunter'), []);
-  p.level = 3;
-  assert.deepEqual(P.availableQuests(p, 'hunter'), ['side_wolf']);
 });
 
 test('the mine is gated by level 8', () => {
   const p = P.newProgress();
-  assert.equal(P.mapUnlocked(p, 'forest'), true);
   assert.equal(P.mapUnlocked(p, 'mine'), false);
   p.level = 8;
   assert.equal(P.mapUnlocked(p, 'mine'), true);

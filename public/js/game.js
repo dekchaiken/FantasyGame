@@ -8,7 +8,7 @@ import { Monster } from './monster.js';
 import { Hud } from './hud.js';
 import { API } from './api.js';
 import { CLASSES } from './config.js';
-import { MAPS, PORTALS, NPCS, MONSTERS, QUESTS, MATERIALS, GEAR, RARITY } from './data.js';
+import { MAPS, PORTALS, NPCS, MONSTERS, QUESTS, MATERIALS, GEAR, RARITY, GRADES } from './data.js';
 import { SKILL_BY_ID, rankMult, rankCooldown } from './skills.js';
 import * as P from './progress.js';
 import { Stage } from './stage.js';
@@ -119,11 +119,22 @@ export const Game = {
     }
   },
 
-  // The hero's weapon model follows the equipped weapon.
+  // The hero's look follows the equipped gear: weapon model and grade, aura, clothing tint.
   syncWeapon() {
     const base = this.equippedBase('weapon');
     const cls = CLASSES[this.character.classId];
-    this.hero.char.setWeapon(base ? base.shape : cls.weapon, base ? base.color : cls.color);
+    const grade = P.topGrade(this.p);
+    this.hero.char.setWeapon(base ? base.shape : cls.weapon, base ? base.color : cls.color, base ? base.grade : 0);
+    this.hero.char.setAura(grade >= 1 ? GRADES[grade].aura : null, grade === GRADES.length - 1);
+    const app = this.character.appearance || {};
+    const shirt = this.equippedBase('shirt');
+    const pants = this.equippedBase('pants');
+    const shoes = this.equippedBase('shoes');
+    this.hero.char.setLook({
+      top: shirt ? shirt.color : app.top?.color,
+      bottom: pants ? pants.color : app.bottom?.color,
+      shoes: shoes ? shoes.color : app.shoes?.color,
+    });
   },
 
   equippedBase(slot) {
@@ -639,10 +650,10 @@ export const Game = {
       }
     }
     if (Math.random() < d.gearChance) {
-      const gear = P.rollDrop(this.character.classId, d.level);
+      const gear = P.rollDrop(this.character.classId, this.p.level);
       if (P.addGear(this.p, gear)) {
         const base = GEAR[gear.base];
-        items.push({ name: `${base.name}${gear.opts.length ? ' · ' + gear.opts.length + ' ออฟชั่น' : ''}`, icon: base.icon, color: RARITY[base.rarity].color, rare: base.rarity !== 'common' });
+        items.push({ name: `${base.name} ${base.epithet}`.trim(), icon: base.icon, color: base.gcolor, rare: base.grade >= 2 });
       } else {
         Hud.toast('กระเป๋าเต็ม ของที่ตกหายไป', 'warn');
       }
@@ -834,7 +845,7 @@ export const Game = {
     const g = P.findGear(this.p, uid);
     this.refreshStats(false);
     this.syncWeapon();
-    Hud.toast(`สวมใส่ ${GEAR[g.base].name} +${g.enh}`);
+    Hud.toast(`สวมใส่ ${GEAR[g.base].name} ${GRADES[GEAR[g.base].grade].name}${g.enh ? ' +' + g.enh : ''}`);
     this.dirty = true;
     Hud.refresh(this);
   },
@@ -842,7 +853,7 @@ export const Game = {
   unequip(slot) {
     P.unequip(this.p, slot);
     this.refreshStats(false);
-    if (slot === 'weapon') this.syncWeapon();
+    this.syncWeapon();
     this.dirty = true;
     Hud.refresh(this);
   },
@@ -871,6 +882,16 @@ export const Game = {
     this.p.gold -= it.price;
     P.addMat(this.p, itemId, 1);
     Hud.toast(`ซื้อ ${it.name} แล้ว`);
+    this.dirty = true;
+    Hud.refresh(this);
+  },
+
+  // Crafts a weapon or armour piece at the smith. band and line come from the window.
+  craft(line, band) {
+    const r = P.craftGear(this.p, line, band, this.character.classId);
+    if (r.error) { Hud.toast(r.error, 'warn'); return; }
+    const base = GEAR[r.gear.base];
+    Hud.toast(`คราฟสำเร็จ: ${base.name} ${GRADES[base.grade].name}`, 'gold');
     this.dirty = true;
     Hud.refresh(this);
   },
