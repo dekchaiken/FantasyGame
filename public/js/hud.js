@@ -6,6 +6,7 @@ import * as DG from './dungeon.js';
 import { SPIRIT_RARITY, SPIRIT_PASSIVES } from './data.js';
 import { Sfx } from './sfx.js';
 import * as P from './progress.js';
+import { ENH_OPTION_AT, enhMult } from './progress.js';
 import { drawThumb } from './thumb.js';
 
 // HUD and windows. Game state is the source of truth; this module only renders it and forwards clicks.
@@ -643,13 +644,15 @@ function questsHtml(g, hud) {
   return html;
 }
 
+const KIND_LABEL = { hunt: 'ตีมอน', quest: 'เควส/เมือง', gather: 'เก็บเลเวล' };
+
 function mapHtml(g) {
   const p = g.p;
   return Object.entries(MAPS).filter(([, m]) => !m.hidden).map(([id, m]) => {
     const ok = P.mapUnlocked(p, id);
     return `<div class="map-card${ok ? '' : ' locked'}${g.map === id ? ' here' : ''}">
       <div class="map-ico">${icon(id === 'town' ? 'shield' : id === 'forest' ? 'leaf' : 'ore')}</div>
-      <div class="map-info"><b>${esc(m.name)}</b><small>${m.levelText}${ok ? '' : ' · ต้องเลเวล ' + m.minLevel}</small></div>
+      <div class="map-info"><b>${esc(m.name)}</b><small>${KIND_LABEL[m.kind] || ''} · ${m.levelText}${ok ? '' : ' · ต้องเลเวล ' + m.minLevel}</small></div>
       ${g.map === id ? '<span class="tag">อยู่ที่นี่</span>' : ok ? `<button class="btn-primary sm" data-act="travel" data-map="${id}">${icon('arrow')} ไป</button>` : `<span class="tag lock">${icon('lock')}</span>`}
     </div>`;
   }).join('');
@@ -791,6 +794,12 @@ function enhHtml(g, w) {
   const btnLabel = max ? 'ตีบวกถึงขีดสุดแล้ว' : !canAfford ? (p.gold < cost ? 'เหรียญไม่พอ' : 'หินเสริมพลังไม่พอ') : 'ตีบวก';
   const opts = item.opts.length ? item.opts.map((o) => `<li>${esc(P.optionLabel(o))}</li>`).join('') : '<li class="muted">ไม่มีออฟชั่นเสริม</li>';
   const stat = base.atk ? `พลังโจมตี ${base.atk}` : `ป้องกัน ${base.def} · HP ${base.hp}`;
+  // What the next level adds, and whether it brings a new option
+  const next = item.enh + 1;
+  const gain = (v) => Math.round(v * (enhMult(next) - enhMult(item.enh)) * 10) / 10;
+  const preview = max ? '' : `<div class="enh-preview"><span>ระดับถัดไป +${next}:</span>
+      ${base.atk ? `<b>พลังโจมตี +${gain(base.atk)}</b>` : `<b>ป้องกัน +${gain(base.def)} · HP +${gain(base.hp)}</b>`}
+      ${ENH_OPTION_AT.includes(next) ? '<em>+ ได้ออฟชั่นใหม่ 1 รายการ</em>' : ''}</div>`;
 
   return `<div class="enh-wrap">
     <div class="enh-left">
@@ -802,6 +811,7 @@ function enhHtml(g, w) {
       <div class="enh-level"><span>+${item.enh}</span>${max ? '' : `<i>→</i><span class="next">+${item.enh + 1}</span>`}</div>
       <div class="enh-name"><b>${gearLabel(item)}</b><small>${GRADES_NAME(base.grade)} · ${stat}</small></div>
       <ul class="opts">${opts}</ul>
+      ${preview}
     </div>
     <div class="enh-right">
       <div class="enh-card">

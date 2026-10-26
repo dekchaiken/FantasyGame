@@ -72,15 +72,29 @@ export function buildField(scene, mapId, def, avoid) {
   const groundMats = bio.ground.map((col) => std(col));
   const pathMat = std(bio.path);
   const tileGeo = new THREE.BoxGeometry(TILE - 0.06, 0.5, TILE - 0.06);
+  // Tiles are drawn as one instanced mesh per material, so a big map is a handful of draw calls.
+  const byMat = new Map();
   for (let i = -n; i < n; i++) {
     for (let j = -n; j < n; j++) {
       const x = (i + 0.5) * TILE;
       const z = (j + 0.5) * TILE;
       const onPath = Math.abs(x) < 1.2 || Math.abs(z) < 1.2;
-      const tile = cast(new THREE.Mesh(tileGeo, onPath ? pathMat : groundMats[Math.floor(rnd() * 3)]));
-      tile.position.set(x, -0.25, z);
-      scene.add(tile);
+      const mat = onPath ? pathMat : groundMats[Math.floor(rnd() * 3)];
+      if (!byMat.has(mat)) byMat.set(mat, []);
+      byMat.get(mat).push([x, z]);
     }
+  }
+  const dummy = new THREE.Object3D();
+  for (const [mat, list] of byMat) {
+    const im = new THREE.InstancedMesh(tileGeo, mat, list.length);
+    list.forEach(([x, z], k) => {
+      dummy.position.set(x, -0.25, z);
+      dummy.updateMatrix();
+      im.setMatrixAt(k, dummy.matrix);
+    });
+    im.instanceMatrix.needsUpdate = true;
+    cast(im);
+    scene.add(im);
   }
 
   if (bio.lava) {

@@ -39,7 +39,7 @@ const AFFIX_KEYS = AFFIXES.map((a) => a.k);
 function cleanGear(g) {
   if (!g || typeof g !== 'object' || !GEAR[g.base] || !uidOk(g.uid)) return null;
   const opts = Array.isArray(g.opts)
-    ? g.opts.filter((o) => o && AFFIX_KEYS.includes(o.k) && Number.isFinite(o.v)).map((o) => ({ k: o.k, v: Math.round(o.v) })).slice(0, 4)
+    ? g.opts.filter((o) => o && AFFIX_KEYS.includes(o.k) && Number.isFinite(o.v)).map((o) => ({ k: o.k, v: Math.round(o.v) })).slice(0, MAX_OPTS)
     : [];
   const runes = (Array.isArray(g.runes) ? g.runes : []).filter((id) => RUNE_IDS.includes(id)).slice(0, runeSlots(GEAR[g.base]));
   return { uid: g.uid, base: g.base, enh: int(g.enh, 0, MAX_ENH, 0), opts, runes };
@@ -163,7 +163,7 @@ export function statsFor(p) {
     const g = findGear(p, p.equip[slot]);
     if (!g) continue;
     const base = GEAR[g.base];
-    const m = 1 + 0.07 * g.enh;
+    const m = enhMult(g.enh);
     if (base.atk) wAtk += base.atk * m;
     if (base.def) aDef += base.def * m;
     aHp += (base.hp || 0) * m;
@@ -202,19 +202,28 @@ export function bandMult(band) {
 }
 
 // A piece of gear of a given base id (`${line}_${band}_${grade}`), with random options for its grade.
+export const MAX_OPTS = 6;
+// Enhancing adds 15% of the base stats per level. At +3, +5 and +9 a random option is added.
+export const ENH_OPTION_AT = [3, 5, 9];
+export function enhMult(enh) {
+  return 1 + 0.15 * enh;
+}
+
+// One random option for a piece of gear, scaled by its band and grade. Never repeats an option it already has.
+export function rollOption(base, rng = Math.random, have = []) {
+  const pool = AFFIXES.filter((a) => !have.includes(a.k));
+  const af = pool[Math.floor(rng() * pool.length)];
+  const [lo, hi] = af.base;
+  const v = (lo + rng() * (hi - lo)) * bandMult(base.band) * GRADES[base.grade].mult;
+  return { k: af.k, v: Math.max(1, Math.round(v)) };
+}
+
 export function makeGear(baseId, rng = Math.random) {
   const base = GEAR[baseId];
-  const grade = GRADES[base.grade];
-  const [min, max] = grade.opts;
+  const [min, max] = GRADES[base.grade].opts;
   const count = min + Math.floor(rng() * (max - min + 1));
-  const pool = [...AFFIXES];
   const opts = [];
-  for (let i = 0; i < count && pool.length; i++) {
-    const [af] = pool.splice(Math.floor(rng() * pool.length), 1);
-    const [lo, hi] = af.base;
-    const v = (lo + rng() * (hi - lo)) * bandMult(base.band) * grade.mult;
-    opts.push({ k: af.k, v: Math.max(1, Math.round(v)) });
-  }
+  for (let i = 0; i < count; i++) opts.push(rollOption(base, rng, opts.map((o) => o.k)));
   return { uid: uidFrom(rng), base: baseId, enh: 0, opts };
 }
 
@@ -343,7 +352,13 @@ export function enhance(p, uid, rng = Math.random) {
   removeMat(p, 'enh_stone', stones);
   if (rng() < ENH_RATE[g.enh + 1]) {
     g.enh++;
-    return { ok: true, result: 'success', msg: `ตีบวกสำเร็จ เป็น +${g.enh}` };
+    const msg = `ตีบวกสำเร็จ เป็น +${g.enh}`;
+    if (ENH_OPTION_AT.includes(g.enh) && g.opts.length < MAX_OPTS) {
+      const o = rollOption(GEAR[g.base], rng, g.opts.map((x) => x.k));
+      g.opts.push(o);
+      return { ok: true, result: 'success', msg: `${msg} · ได้ออฟชั่นใหม่: ${optionLabel(o)}`, option: o };
+    }
+    return { ok: true, result: 'success', msg };
   }
   if (g.enh >= ENH_DOWN_FROM) {
     g.enh--;

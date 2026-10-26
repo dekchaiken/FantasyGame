@@ -935,3 +935,6 @@ button, input, select { font: inherit; color: inherit; }
 .qt-row.done .qt-name { text-decoration: line-through; color: var(--muted); }
 .qt-row.open { color: var(--muted); }
 .qt-row.tracked { background: rgba(var(--rgb-sky), 0.12); }
+.enh-preview { display: flex; flex-direction: column; gap: 2px; align-items: center; font-size: 12px; color: var(--muted); padding: 8px 10px; border-radius: 12px; background: #f3f7ff; }
+.enh-preview b { color: var(--green); font-size: 13px; }
+.enh-preview em { font-style: normal; color: #9b5cff; font-weight: 600; }

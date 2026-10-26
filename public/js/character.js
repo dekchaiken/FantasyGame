@@ -174,7 +174,13 @@ export function buildCharacter(input) {
     mesh(pivot, sphere(0.09), skin, 0, -0.44, 0);
     return pivot;
   });
-  let weapon = buildWeapon(cls.weapon, cls.color, accent);
+  // The weapon sits in the hand (bottom of the arm) with its blade angled forward, not up over the shoulder.
+  const placeWeapon = (w) => {
+    w.position.set(0, -0.26, 0.04);
+    w.rotation.set(0.55, 0, 0);
+    return w;
+  };
+  let weapon = placeWeapon(buildWeapon(cls.weapon, cls.color, accent));
   arms[1].add(weapon);
 
   // head (pivot at neck)
@@ -205,7 +211,7 @@ export function buildCharacter(input) {
     setWeapon(shape, color, grade = 0) {
       arms[1].remove(weapon);
       weapon.traverse((o) => o.geometry?.dispose());
-      weapon = buildWeapon(shape, color, std(color));
+      weapon = placeWeapon(buildWeapon(shape, color, std(color)));
       weapon.scale.setScalar(1 + 0.06 * grade);
       arms[1].add(weapon);
     },

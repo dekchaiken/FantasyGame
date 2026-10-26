@@ -466,6 +466,14 @@ export const Game = {
 
     // basic attack when a target is in range
     this.cdBasic -= dt;
+    if (this.pendingHit) {
+      this.pendingHit.t -= dt;
+      if (this.pendingHit.t <= 0) {
+        const { m } = this.pendingHit;
+        this.pendingHit = null;
+        if (m.alive) this.hitMonster(m, 1.0, 0);
+      }
+    }
     const tm = this.targetMon;
     if (tm && tm.alive && this.cdBasic <= 0 && Math.hypot(tm.x - p.x, tm.z - p.z) <= range + 0.3) {
       this.performBasic(tm);
@@ -646,10 +654,11 @@ export const Game = {
     this.aura(CLASSES[this.character.classId].color, 1.6);
     const p = this.hero.group.position;
     this.fx.spawn(this.weaponFx(), new THREE.Vector3(p.x, 1.0, p.z), this.facing(), c.range);
-    this.hitMonster(m, 1.0);
+    // the hit lands at the contact point of the swing, so the damage matches what is seen
+    this.pendingHit = { m, t: 0.14 };
   },
 
-  hitMonster(m, mult) {
+  hitMonster(m, mult, knock = 0.4) {
     const { dmg, crit } = this.calcDamage(mult, m.def.def);
     this.floatText(m.x, 1.8 * m.def.size, m.z, (crit ? 'คริติคอล ' : '') + dmg, crit ? '#ffd166' : '#ffffff', crit);
     if (crit) {
@@ -659,9 +668,9 @@ export const Game = {
     // knock the monster back a little, away from the hero
     const p = this.hero.group.position;
     const d = Math.hypot(m.x - p.x, m.z - p.z) || 1;
-    if (!blocked(this.world.solids, m.x + ((m.x - p.x) / d) * 0.4, m.z + ((m.z - p.z) / d) * 0.4, 0.5)) {
-      m.x += ((m.x - p.x) / d) * 0.4;
-      m.z += ((m.z - p.z) / d) * 0.4;
+    if (knock && !blocked(this.world.solids, m.x + ((m.x - p.x) / d) * knock, m.z + ((m.z - p.z) / d) * knock, 0.5)) {
+      m.x += ((m.x - p.x) / d) * knock;
+      m.z += ((m.z - p.z) / d) * knock;
       m.group.position.set(m.x, 0, m.z);
     }
     this.impact(m);

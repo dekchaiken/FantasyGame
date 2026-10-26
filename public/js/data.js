@@ -231,36 +231,36 @@ export const MONSTERS = {
 
 // size: world units, spawns: [monsterId, count]
 export const MAPS = {
-  town: { name: 'ดินแดนสวรรค์', levelText: 'เมืองหลัก', minLevel: 1, safe: true, sky: '#bfe9ff' },
+  town: { name: 'ดินแดนสวรรค์', kind: 'quest', levelText: 'เมืองหลัก', minLevel: 1, safe: true, sky: '#bfe9ff' },
   forest: {
-    name: 'ป่าวิญญาณ', levelText: 'เลเวล 1-5', minLevel: 1, size: 56, biome: 'forest', sky: '#c8f0e0',
+    kind: 'hunt', name: 'ป่าวิญญาณ', levelText: 'เลเวล 1-5', minLevel: 1, size: 114, biome: 'forest', sky: '#c8f0e0',
     zones: [
-      { name: 'ทุ่งเห็ดเรืองแสง', x: -18, z: -14, r: 8, mons: [['mushroom', 5]] },
-      { name: 'ลานสไลม์', x: 12, z: -8, r: 9, mons: [['slime', 6]] },
-      { name: 'ป่าทึบ', x: 16, z: 14, r: 9, mons: [['wolf', 3], ['bat', 3]] },
-      { name: 'ริมธาร', x: -16, z: 14, r: 7, mons: [['slime', 4]] },
+      { name: 'ทุ่งเห็ดเรืองแสง', x: -36, z: -28, r: 11, mons: [['mushroom', 5]] },
+      { name: 'ลานสไลม์', x: 24, z: -16, r: 13, mons: [['slime', 6]] },
+      { name: 'ป่าทึบ', x: 32, z: 28, r: 13, mons: [['wolf', 3], ['bat', 3]] },
+      { name: 'ริมธาร', x: -32, z: 28, r: 10, mons: [['slime', 4]] },
     ],
   },
   meadow: {
-    name: 'ทุ่งแสงทอง', levelText: 'เลเวล 5-10', minLevel: 5, size: 56, biome: 'meadow', sky: '#fff0c2',
+    kind: 'hunt', name: 'ทุ่งแสงทอง', levelText: 'เลเวล 5-10', minLevel: 5, size: 114, biome: 'meadow', sky: '#fff0c2',
     zones: [
-      { name: 'ทุ่งกกทอง', x: -16, z: 0, r: 9, mons: [['wild_wolf', 4]] },
-      { name: 'บ่อน้ำพุร้อน', x: 14, z: -12, r: 7, mons: [['fire_slime', 6]] },
-      { name: 'เนินหญ้าใต้', x: 10, z: 14, r: 8, mons: [['wild_wolf', 2], ['fire_slime', 3], ['mushroom', 2]] },
+      { name: 'ทุ่งกกทอง', x: -32, z: 0, r: 13, mons: [['wild_wolf', 4]] },
+      { name: 'บ่อน้ำพุร้อน', x: 28, z: -24, r: 10, mons: [['fire_slime', 6]] },
+      { name: 'เนินหญ้าใต้', x: 20, z: 28, r: 11, mons: [['wild_wolf', 2], ['fire_slime', 3], ['mushroom', 2]] },
     ],
   },
   mine: {
-    name: 'เหมืองลาวาร้อน', levelText: 'เลเวล 10-20', minLevel: 10, size: 56, biome: 'mine', sky: '#3a1d1d',
+    kind: 'hunt', name: 'เหมืองลาวาร้อน', levelText: 'เลเวล 10-20', minLevel: 10, size: 114, biome: 'mine', sky: '#3a1d1d',
     zones: [
-      { name: 'ปล่องลาวา', x: -16, z: -12, r: 9, mons: [['golem', 4]] },
-      { name: 'โพรงน้ำแข็ง', x: 16, z: 10, r: 8, mons: [['frost_golem', 4], ['cave_bat', 3]] },
+      { name: 'ปล่องลาวา', x: -32, z: -24, r: 13, mons: [['golem', 4]] },
+      { name: 'โพรงน้ำแข็ง', x: 32, z: 20, r: 11, mons: [['frost_golem', 4], ['cave_bat', 3]] },
     ],
   },
   ruin: {
-    name: 'ซากปรักสวรรค์', levelText: 'เลเวล 20-30', minLevel: 20, size: 56, biome: 'ruin', sky: '#e8dcff',
+    kind: 'hunt', name: 'ซากปรักสวรรค์', levelText: 'เลเวล 20-30', minLevel: 20, size: 114, biome: 'ruin', sky: '#e8dcff',
     zones: [
-      { name: 'ลานซากเทพ', x: -14, z: -12, r: 9, mons: [['gold_golem', 3]] },
-      { name: 'ศาลาร้าง', x: 14, z: 12, r: 8, mons: [['frost_golem', 2], ['cave_bat', 4]] },
+      { name: 'ลานซากเทพ', x: -28, z: -24, r: 13, mons: [['gold_golem', 3]] },
+      { name: 'ศาลาร้าง', x: 28, z: 24, r: 11, mons: [['frost_golem', 2], ['cave_bat', 4]] },
     ],
   },
   dungeon: { name: 'ดันเจี้ยน', levelText: '', minLevel: 1, size: 36, biome: 'dungeon', sky: '#2a2440', spawns: [], hidden: true },
@@ -302,18 +302,18 @@ export const PORTALS = {
   dungeon: [{ x: 0, z: -16.5, to: 'town', arrive: [2, -12], label: 'ออกจากดันเจี้ยน' }],
   town: [{ x: 0, z: -17.5, to: 'forest', arrive: [0, -13], label: 'ป่าวิญญาณ' }],
   forest: [
-    { x: 0, z: -24, to: 'town', arrive: [0, -14], label: 'ดินแดนสวรรค์' },
-    { x: 24, z: 0, to: 'meadow', arrive: [-21, 0], label: 'ทุ่งแสงทอง' },
+    { x: 0, z: -55, to: 'town', arrive: [0, -14], label: 'ดินแดนสวรรค์' },
+    { x: 55, z: 0, to: 'meadow', arrive: [-52, 0], label: 'ทุ่งแสงทอง' },
   ],
   meadow: [
-    { x: -24, z: 0, to: 'forest', arrive: [21, 0], label: 'ป่าวิญญาณ' },
-    { x: 24, z: 0, to: 'mine', arrive: [-21, 0], label: 'เหมืองลาวาร้อน' },
+    { x: -55, z: 0, to: 'forest', arrive: [52, 0], label: 'ป่าวิญญาณ' },
+    { x: 55, z: 0, to: 'mine', arrive: [-52, 0], label: 'เหมืองลาวาร้อน' },
   ],
   mine: [
-    { x: -24, z: 0, to: 'meadow', arrive: [21, 0], label: 'ทุ่งแสงทอง' },
-    { x: 24, z: 0, to: 'ruin', arrive: [-21, 0], label: 'ซากปรักสวรรค์' },
+    { x: -55, z: 0, to: 'meadow', arrive: [52, 0], label: 'ทุ่งแสงทอง' },
+    { x: 55, z: 0, to: 'ruin', arrive: [-52, 0], label: 'ซากปรักสวรรค์' },
   ],
-  ruin: [{ x: -24, z: 0, to: 'mine', arrive: [21, 0], label: 'เหมืองลาวาร้อน' }],
+  ruin: [{ x: -55, z: 0, to: 'mine', arrive: [52, 0], label: 'เหมืองลาวาร้อน' }],
 };
 
 export const NPCS = {
