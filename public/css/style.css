@@ -943,3 +943,12 @@ button, input, select { font: inherit; color: inherit; }
 .dock-btn.sound { min-width: 52px; }
 .dock-btn.sound .ico { width: 20px; height: 20px; }
 .dock-btn.sound:not(.on) { opacity: 0.6; }
+
+/* ---------- layout fixes from the in-game check ---------- */
+/* dock buttons keep their label on one line; the auto button no longer wraps "ออโต้ ปิด" */
+.dock-btn { white-space: nowrap; min-width: 64px; }
+.dock-btn span { white-space: nowrap; font-size: 12px; line-height: 1.1; }
+#dock-auto { min-width: 96px; }
+/* HP and MP values are easier to read over the bars */
+.bar span { font-size: 12px; font-weight: 700; color: #fff; }
+.bar.exp span { display: none; }
