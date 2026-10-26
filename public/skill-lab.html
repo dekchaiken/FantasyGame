@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Skill Lab · ดินแดนสวรรค์</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;700;800&family=Sarabun:wght@400;700&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap">
   <link rel="stylesheet" href="css/style.css">
   <script type="importmap">
     { "imports": {
@@ -14,67 +14,79 @@
     } }
   </script>
   <style>
-    body { overflow: auto; background: linear-gradient(#5fc8ff, #bfeeff 70%, #9ee08a 70%); }
-    .lab { display: grid; grid-template-columns: 260px 1fr; gap: 16px; width: min(1120px, 96vw); margin: 20px auto; align-items: start; }
+    body { overflow: auto; background: radial-gradient(ellipse at 50% 0%, #1b2a66 0%, var(--bg) 60%); }
+    .lab-head { width: min(1160px, 96vw); margin: 26px auto 0; display: flex; justify-content: space-between; align-items: flex-end; gap: 16px; flex-wrap: wrap; }
+    .lab-head h1 { font-size: 34px; background: var(--accent); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lab-head p { margin: 4px 0 0; color: var(--muted); }
+    .lab-head a { color: var(--cyan); }
+    .lab { width: min(1160px, 96vw); margin: 18px auto 40px; display: grid; grid-template-columns: 280px 1fr; gap: 16px; align-items: start; }
     .lab-side, .lab-main { padding: 16px; }
-    .lab-title { width: min(1120px, 96vw); margin: 22px auto 0; }
-    .lab-title .logo-title { font-size: 36px; }
-    .lab-title p { color: var(--navy); font-weight: 700; }
-    .lab-title a { color: var(--navy); }
-    .skill-item { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 12px; cursor: pointer; border: 3px solid transparent; }
-    .skill-item:hover, .skill-item.on { border-color: var(--gold-ink); background: linear-gradient(#fff3b8, var(--gold)); }
-    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px; }
-    .grid2 label { display: block; color: var(--navy); font-size: 13px; font-weight: 700; }
-    .grid2 input, .grid2 select { width: 100%; margin-top: 4px; padding: 7px 9px; border-radius: 10px; border: 2px solid #b6cdf0; background: #fff; color: var(--ink); font-weight: 600; }
-    .grid2 input[type=range] { padding: 0; }
+    .skill-item { display: flex; align-items: center; gap: 10px; padding: 9px; border-radius: 12px; cursor: pointer; border: 1px solid transparent; }
+    .skill-item:hover, .skill-item.on { border-color: var(--cyan); background: rgba(94, 231, 255, 0.08); }
+    .skill-item .ico-box { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; background: rgba(94, 231, 255, 0.12); color: var(--cyan); flex: 0 0 auto; }
+    .skill-item small { color: var(--muted); display: block; font-size: 12px; }
+    .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 14px; }
+    .grid2 label { display: block; color: var(--muted); font-size: 13px; }
+    .grid2 input:not([type=range]):not([type=checkbox]), .grid2 select { width: 100%; margin-top: 5px; padding: 9px 11px; border-radius: 10px; border: 1px solid var(--line); background: rgba(0, 0, 0, 0.3); color: var(--ink); }
+    .grid2 input[type=range] { width: 100%; margin-top: 8px; accent-color: var(--cyan); }
+    .grid2 input[type=color] { width: 100%; height: 40px; margin-top: 5px; border-radius: 10px; border: 1px solid var(--line); background: transparent; padding: 3px; }
     .grid2 .full { grid-column: 1 / -1; }
-    .range-val { color: var(--gold-ink); font-size: 12px; }
-    #lab-preview { width: 100%; height: 280px; border-radius: 14px; border: 3px solid var(--navy); display: block; }
-    .note { color: var(--muted); font-size: 13px; font-weight: 700; }
-    .ok { color: #1f9d55; min-height: 1.2em; font-weight: 800; }
+    .range-val { color: var(--gold); font-size: 12px; float: right; }
+    .icon-pick { display: grid; grid-template-columns: repeat(9, 1fr); gap: 6px; margin-top: 6px; }
+    .icon-pick button { aspect-ratio: 1; border-radius: 10px; border: 1px solid var(--line); background: rgba(255, 255, 255, 0.03); color: var(--muted); display: grid; place-items: center; cursor: pointer; }
+    .icon-pick button svg { width: 20px; height: 20px; }
+    .icon-pick button.on { color: #061021; background: var(--accent); border-color: transparent; }
+    #lab-preview { width: 100%; height: 300px; border-radius: 14px; border: 1px solid var(--line); display: block; }
+    .note { color: var(--muted); font-size: 13px; }
+    .ok { color: var(--green); min-height: 1.2em; font-weight: 500; }
     .row { display: flex; gap: 10px; justify-content: space-between; align-items: center; flex-wrap: wrap; }
-    .btn-danger { color: var(--danger); }
-    @media (max-width: 800px) { .lab { grid-template-columns: 1fr; } }
+    .btn-danger { color: var(--red); }
+    @media (max-width: 860px) { .lab { grid-template-columns: 1fr; } .grid2 { grid-template-columns: 1fr; } }
   </style>
 </head>
 <body>
-  <div class="lab-title">
-    <div class="logo-title">Skill Lab</div>
-    <p>ออกแบบสกิลและเอฟเฟกต์ได้เอง พรีวิวสด แล้วบันทึกไว้ใช้ในเกม · <a href="index.html">กลับหน้าเกม</a></p>
+  <div class="lab-head">
+    <div>
+      <h1>Skill Lab</h1>
+      <p>ออกแบบสกิลและเอฟเฟกต์ 3D แล้วพรีวิวสด · <a href="index.html">กลับหน้าเกม</a></p>
+    </div>
   </div>
 
   <div class="lab">
-    <aside class="lab-side panel">
+    <aside class="lab-side glass">
       <label class="note">อาชีพ
-        <select id="f-filter" style="width:100%;margin:6px 0 10px;padding:7px;border-radius:10px;border:2px solid #b6cdf0;font-weight:700"></select>
+        <select id="f-filter" style="width:100%;margin:6px 0 12px;padding:9px 11px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--ink)"></select>
       </label>
       <div id="skill-list"></div>
-      <div style="margin-top:10px"><button class="btn-yellow wide" id="btn-new">+ สร้างสกิลใหม่</button></div>
+      <div style="margin-top:12px"><button class="btn-primary wide" id="btn-new">สร้างสกิลใหม่</button></div>
     </aside>
 
-    <main class="lab-main panel">
+    <main class="lab-main glass">
       <canvas id="lab-preview"></canvas>
       <div class="row" style="margin-top:12px">
-        <button class="btn-ghost small" id="btn-replay">▶ เล่นเอฟเฟกต์ซ้ำ</button>
+        <button class="btn-ghost sm" id="btn-replay">เล่นเอฟเฟกต์ซ้ำ</button>
         <label class="note">ทิศทาง
-          <select id="f-dir" style="padding:6px 8px;border-radius:10px;border:2px solid #b6cdf0;font-weight:700">
-            <option value="1,0">→ ขวา</option><option value="-1,0">← ซ้าย</option>
-            <option value="0,-1">↑ บน</option><option value="0,1">↓ ล่าง</option>
+          <select id="f-dir" style="padding:7px 10px;border-radius:10px;border:1px solid var(--line);background:rgba(0,0,0,.3);color:var(--ink)">
+            <option value="1,0">ขวา</option><option value="-1,0">ซ้าย</option>
+            <option value="0,-1">บน</option><option value="0,1">ล่าง</option>
           </select>
         </label>
       </div>
 
-      <form id="form" class="grid2" style="margin-top:14px">
+      <form id="form" class="grid2" style="margin-top:16px">
         <div><label>ชื่อสกิล<input id="f-name" maxlength="40" required></label></div>
-        <div><label>ไอคอน (emoji)<input id="f-icon" maxlength="4"></label></div>
         <div><label>อาชีพ<select id="f-class"></select></label></div>
+        <div class="full"><label>ไอคอน</label><div id="f-icon" class="icon-pick"></div></div>
         <div><label>ปุ่มลัด (1-6)<select id="f-key"><option>1</option><option>2</option><option>3</option><option>4</option><option>5</option><option>6</option></select></label></div>
+        <div><label>เลเวลที่ปลดล็อก<input id="f-reqlv" type="number" min="1" max="30"></label></div>
         <div><label>คูลดาวน์ (ms)<input id="f-cooldown" type="number" min="100" max="60000" step="100"></label></div>
         <div><label>MP ที่ใช้<input id="f-mp" type="number" min="0" max="999"></label></div>
-        <div><label>ดาเมจ<input id="f-damage" type="number" min="0" max="99999"></label></div>
-        <div><label>ระยะ (px)<input id="f-range" type="number" min="20" max="800"></label></div>
+        <div><label>ดาเมจ (% ของพลังโจมตี)<input id="f-mult" type="number" min="0" max="10" step="0.1"></label></div>
+        <div><label>ฟื้นฟู (สัดส่วนของ HP สูงสุด, 0-1)<input id="f-heal" type="number" min="0" max="1" step="0.05"></label></div>
+        <div><label>ระยะ (px, 40px = 1 ช่อง)<input id="f-range" type="number" min="0" max="800"></label></div>
+        <div style="display:flex;align-items:end;padding-bottom:8px"><label style="display:flex;gap:10px;align-items:center;color:var(--ink)"><input id="f-aoe" type="checkbox"> โจมตีทุกเป้าหมายในระยะ</label></div>
 
-        <div class="full"><hr style="border:0;border-top:2px solid #d5e4fb"><b style="color:var(--navy)">เอฟเฟกต์</b></div>
+        <div class="full"><hr style="border:0;border-top:1px solid var(--line)"><b style="color:var(--cyan);font-weight:500">เอฟเฟกต์</b></div>
         <div><label>รูปแบบ<select id="f-type">
           <option value="burst">burst · ระเบิดรอบตัว</option>
           <option value="nova">nova · วงคลื่น</option>
@@ -92,9 +104,9 @@
         <div><label>สั่นจอ <span class="range-val" id="v-shake"></span><input id="f-shake" type="range" min="0" max="20"></label></div>
 
         <div class="full row" style="margin-top:6px">
-          <button type="button" class="btn-ghost small btn-danger" id="btn-delete">ลบสกิลนี้</button>
-          <button type="button" class="btn-ghost small" id="btn-reset">คืนค่าเริ่มต้น</button>
-          <button type="submit" class="btn-yellow" id="btn-save">บันทึกสกิล</button>
+          <button type="button" class="btn-ghost sm btn-danger" id="btn-delete">ลบสกิลนี้</button>
+          <button type="button" class="btn-ghost sm" id="btn-reset">คืนค่าเริ่มต้น</button>
+          <button type="submit" class="btn-primary" id="btn-save">บันทึกสกิล</button>
         </div>
         <div class="full ok" id="save-msg"></div>
         <div class="full error" id="save-err"></div>

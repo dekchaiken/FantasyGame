@@ -1,4 +1,5 @@
 import { CLASSES } from './config.js';
+import { SAVE_VERSION, normalize } from './progress.js';
 
 // Talks to server.js when it is running. When there is no API (static hosting such as Vercel),
 // it falls back to the same routes kept in this browser's localStorage.
@@ -62,7 +63,7 @@ function localHandle(method, url, body, token) {
       gender: body.gender === 'female' ? 'female' : 'male',
       classId: CLASSES[body.classId] ? body.classId : 'swordsman',
       appearance: body.appearance || {},
-      level: 1,
+      progress: normalize({}),
     };
     db.characters.push(ch);
     saveLocal(db);
@@ -81,6 +82,7 @@ function localHandle(method, url, body, token) {
     }
     if (method === 'PUT') {
       if (body.appearance) ch.appearance = body.appearance;
+      if (body.progress) ch.progress = normalize(body.progress);
       saveLocal(db);
     }
     return { character: ch };
@@ -112,6 +114,7 @@ export const API = {
   token: null,
   local: false,
   config: null,
+  version: SAVE_VERSION,
 
   async init() {
     try { this.token = localStorage.getItem(LS_TOKEN); } catch { this.token = null; }

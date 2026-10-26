@@ -1,16 +1,24 @@
 import { API } from './api.js';
-import { DEFAULT_APPEARANCE } from './config.js';
+import { CLASSES, DEFAULT_APPEARANCE } from './config.js';
+import { MAPS } from './data.js';
 import { Stage } from './stage.js';
 import { Menu } from './menu.js';
 import { Game } from './game.js';
 import { mountDesigner } from './designer.js';
 import { drawThumb } from './thumb.js';
 import { createPortal } from './portal.js';
+import { icon } from './icons.js';
 
 // Screen flow: splash -> login -> character select -> creator -> enter loader -> world.
 const $ = (id) => document.getElementById(id);
 const MAX_CHARACTERS = 3;
 const DEMO = { gender: 'male', classId: 'swordsman', appearance: DEFAULT_APPEARANCE };
+const TIPS = [
+  'กด 1-6 ใช้สกิล · Space โจมตีเป้าหมายที่ใกล้ที่สุด · Q ใช้ยาฟื้นพลัง',
+  'กด T เปิดออโต้ ตัวละครจะล่ามอนสเตอร์ใกล้ตัวให้เอง',
+  'เดินเข้าพอร์ทเพื่อย้ายแมพ เหมืองลาวาร้อนต้องเลเวล 8 ขึ้นไป',
+  'คุยกับ NPC ที่มีเครื่องหมายสีทองเพื่อรับภารกิจ',
+];
 
 let characters = [];
 let selectedIdx = 0;
@@ -21,28 +29,21 @@ function show(id) {
 }
 
 // ---------- splash ----------
-const TIPS = [
-  'กดเลข 1-6 เพื่อใช้สกิลได้ทันที',
-  'คลิกพื้นเพื่อให้ตัวละครเดินไปยังจุดนั้น',
-  'ออกแบบสกิลและเอฟเฟกต์ได้ที่ Skill Lab',
-  'ชนะหุ่นฝึกเพื่อทำเควส "เจตนารมณ์แห่งสวรรค์"',
-];
-
 function runSplash() {
   return new Promise((resolve) => {
     const bar = $('splash-bar');
     const tip = $('splash-tip');
     const start = performance.now();
-    const dur = 2600;
+    const dur = 2400;
     let i = 0;
-    const tipTimer = setInterval(() => { tip.textContent = TIPS[i++ % TIPS.length]; }, 900);
+    const tipTimer = setInterval(() => { tip.textContent = TIPS[i++ % TIPS.length]; }, 1000);
     const tick = (now) => {
       const k = Math.min(1, (now - start) / dur);
       bar.style.width = (k * 100).toFixed(1) + '%';
       if (k < 1) requestAnimationFrame(tick);
       else {
         clearInterval(tipTimer);
-        setTimeout(resolve, 250);
+        setTimeout(resolve, 200);
       }
     };
     requestAnimationFrame(tick);
@@ -58,10 +59,8 @@ function loadGoogle() {
   const slot = $('google-btn');
   const clientId = API.config?.googleClientId;
   if (!clientId) {
-    slot.innerHTML = '<button class="btn-ghost wide" disabled>Google Login (ยังไม่ได้ตั้งค่า)</button>';
-    $('login-hint').textContent = API.local
-      ? 'โหมดออฟไลน์: ข้อมูลเก็บในเบราว์เซอร์นี้'
-      : 'ตั้งค่า GOOGLE_CLIENT_ID เพื่อเปิด Google Login';
+    slot.innerHTML = '<button class="btn-ghost wide" disabled>เข้าสู่ระบบด้วย Google (ยังไม่เปิดใช้งาน)</button>';
+    $('login-hint').textContent = API.local ? 'โหมดออฟไลน์: บันทึกข้อมูลในเบราว์เซอร์นี้' : 'ตั้งค่า GOOGLE_CLIENT_ID เพื่อเปิดใช้งาน';
     return;
   }
   if (googleTried) return;
@@ -70,7 +69,7 @@ function loadGoogle() {
   const tryInit = () => {
     if (window.google?.accounts?.id) {
       google.accounts.id.initialize({ client_id: clientId, callback: onGoogle });
-      google.accounts.id.renderButton(slot, { theme: 'outline', size: 'large', text: 'continue_with', shape: 'pill', width: 280 });
+      google.accounts.id.renderButton(slot, { theme: 'filled_black', size: 'large', text: 'continue_with', shape: 'pill', width: 300 });
     } else if (tries++ < 40) {
       setTimeout(tryInit, 150);
     } else {
@@ -121,8 +120,7 @@ async function showCharSelect() {
   }
   if (selectedIdx >= characters.length) selectedIdx = 0;
   renderCharList();
-  if (characters[selectedIdx]) Menu.setCharacter(characters[selectedIdx]);
-  else Menu.setCharacter(DEMO);
+  Menu.setCharacter(characters[selectedIdx] || DEMO);
   Menu.setView('select');
   Stage.use(Menu);
   show('charselect');
@@ -146,9 +144,13 @@ function renderCharList() {
       card.appendChild(canvas);
       const info = document.createElement('div');
       info.className = 'char-info';
-      info.innerHTML = `<b></b><span class="cls"></span><span class="lv">Lv.${c.level}</span>`;
+      const lv = c.progress?.level || 1;
+      const map = MAPS[c.progress?.map || 'town']?.name || '';
+      info.innerHTML = `<b></b><span class="cls"></span><span class="map"></span><span class="lv"></span>`;
       info.querySelector('b').textContent = c.name;
-      info.querySelector('.cls').textContent = className(c.classId);
+      info.querySelector('.cls').textContent = CLASSES[c.classId].name;
+      info.querySelector('.map').textContent = map;
+      info.querySelector('.lv').textContent = 'LV ' + lv;
       card.appendChild(info);
       card.addEventListener('click', () => {
         selectedIdx = i;
@@ -158,15 +160,11 @@ function renderCharList() {
       card.addEventListener('dblclick', () => enterWorld(c));
     } else {
       card.className = 'char-card empty';
-      card.textContent = '+ สร้างตัวละคร';
+      card.innerHTML = `${icon('plus')}<span>สร้างตัวละคร</span>`;
       card.addEventListener('click', () => (characters.length < MAX_CHARACTERS ? openCreator() : null));
     }
     list.appendChild(card);
   }
-}
-
-function className(id) {
-  return { swordsman: 'นักดาบ', assassin: 'นักฆ่า', mage: 'นักเวทย์', priest: 'นักพรต' }[id] || id;
 }
 
 async function deleteSelected() {
@@ -184,12 +182,8 @@ async function deleteSelected() {
 // ---------- creator ----------
 let cstate = null;
 
-function freshCreatorState() {
-  return { name: '', gender: 'male', classId: 'swordsman', appearance: structuredClone(DEFAULT_APPEARANCE) };
-}
-
 function openCreator() {
-  cstate = freshCreatorState();
+  cstate = { name: '', gender: 'male', classId: 'swordsman', appearance: structuredClone(DEFAULT_APPEARANCE) };
   Menu.setCharacter(cstate);
   Menu.setView('creator');
   Stage.use(Menu);
@@ -221,7 +215,8 @@ async function createCharacter() {
       classId: cstate.classId,
       appearance: cstate.appearance,
     });
-    selectedIdx = characters.length;
+    characters.push(data.character);
+    selectedIdx = characters.length - 1;
     enterWorld(data.character);
   } catch (e) {
     if (e.status === 401) return showLogin();
@@ -232,16 +227,16 @@ async function createCharacter() {
 // ---------- enter-world loader ----------
 async function enterWorld(character) {
   show('enter-loader');
-  $('enter-title').textContent = `กำลังเข้าสู่ ดินแดนสวรรค์`;
+  $('enter-title').textContent = `กำลังเข้าสู่ ${MAPS[character.progress?.map || 'town'].name}`;
   const portal = createPortal(character);
   Stage.use(portal);
 
   let i = 0;
   $('enter-tip').textContent = TIPS[0];
-  const tipTimer = setInterval(() => { $('enter-tip').textContent = TIPS[++i % TIPS.length]; }, 900);
+  const tipTimer = setInterval(() => { $('enter-tip').textContent = TIPS[++i % TIPS.length]; }, 1100);
 
   const start = performance.now();
-  const dur = 2800;
+  const dur = 2600;
   await new Promise((resolve) => {
     const frame = (now) => {
       const k = Math.min(1, (now - start) / dur);
@@ -254,6 +249,11 @@ async function enterWorld(character) {
   });
   clearInterval(tipTimer);
   await Game.start(character);
+}
+
+async function backToSelect() {
+  await Game.leave();
+  await showCharSelect();
 }
 
 async function logout() {
@@ -270,6 +270,7 @@ async function boot() {
   $('btn-logout').addEventListener('click', logout);
   $('btn-start').addEventListener('click', () => characters[selectedIdx] && enterWorld(characters[selectedIdx]));
   $('btn-delete-char').addEventListener('click', deleteSelected);
+  $('btn-back-select').addEventListener('click', backToSelect);
   $('btn-new-char').addEventListener('click', () => (characters.length < MAX_CHARACTERS ? openCreator() : null));
 
   await runSplash();

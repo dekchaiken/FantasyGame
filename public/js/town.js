@@ -161,8 +161,8 @@ export function buildTown(scene) {
     }
     solid(x, z, 2.4, 1.2);
   }
-  stall(-4.5, 3.5, '#ff8fa3');
-  stall(4.5, 3.5, '#8fd8ff');
+  stall(-9, 1.5, '#ff8fa3');
+  stall(9, 1.5, '#8fd8ff');
 
   // trees
   function tree(x, z, s = 1) {

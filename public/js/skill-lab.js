@@ -3,12 +3,14 @@ import { Effects } from './effects.js';
 import { API } from './api.js';
 import { CLASSES, DEFAULT_SKILLS } from './config.js';
 import { buildCharacter } from './character.js';
+import { icon, ICON_NAMES } from './icons.js';
 
 // Skill Lab: design a skill and its 3D effect, preview it live, save it to the server (or this browser).
 const $ = (id) => document.getElementById(id);
+const UNIT = 40;
 let skills = [];
 let current = null;
-const UNIT = 40;
+let previewDir = { x: 1, z: 0 };
 
 // ---------- 3D preview ----------
 const canvas = $('lab-preview');
@@ -17,12 +19,12 @@ renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 const scene = new THREE.Scene();
-scene.background = new THREE.Color('#dff4ff');
-scene.add(new THREE.HemisphereLight('#ffffff', '#6fae52', 1.6));
-const sun = new THREE.DirectionalLight('#fff2d6', 1.4);
+scene.background = new THREE.Color('#0c1430');
+scene.add(new THREE.HemisphereLight('#dbe8ff', '#3a5a3a', 1.6));
+const sun = new THREE.DirectionalLight('#ffffff', 1.3);
 sun.position.set(4, 8, 6);
 scene.add(sun);
-const ground = new THREE.Mesh(new THREE.CircleGeometry(7, 48), new THREE.MeshStandardMaterial({ color: '#8fd16b' }));
+const ground = new THREE.Mesh(new THREE.CircleGeometry(7, 48), new THREE.MeshStandardMaterial({ color: '#2f5a3f' }));
 ground.rotation.x = -Math.PI / 2;
 scene.add(ground);
 const camera = new THREE.PerspectiveCamera(40, 1, 0.1, 100);
@@ -34,11 +36,10 @@ dummy.group.position.set(2.6, 0, 0);
 dummy.group.rotation.y = Math.PI;
 scene.add(dummy.group);
 let nextAt = 0;
-let previewDir = { x: 1, z: 0 };
 
 function resizePreview() {
   const w = canvas.clientWidth || 520;
-  const h = canvas.clientHeight || 280;
+  const h = canvas.clientHeight || 300;
   renderer.setSize(w, h, false);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
@@ -64,14 +65,14 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-// ---------- skill list & form ----------
-const FIELDS = { name: 'f-name', icon: 'f-icon', classId: 'f-class', key: 'f-key', cooldown: 'f-cooldown', mp: 'f-mp', damage: 'f-damage', range: 'f-range' };
+// ---------- list & form ----------
+const FIELDS = { name: 'f-name', classId: 'f-class', key: 'f-key', reqLv: 'f-reqlv', cooldown: 'f-cooldown', mp: 'f-mp', mult: 'f-mult', heal: 'f-heal', range: 'f-range' };
 const FX_FIELDS = { type: 'f-type', duration: 'f-duration', color: 'f-color', color2: 'f-color2', count: 'f-count', size: 'f-size', speed: 'f-speed', shake: 'f-shake' };
 
 function blankSkill(classId = 'swordsman') {
   return {
-    id: '', classId, name: 'สกิลใหม่', icon: '✦', key: 1, cooldown: 1000, mp: 5, damage: 20, range: 120,
-    fx: { type: 'burst', color: '#ffcc00', color2: '#ffffff', count: 24, size: 8, duration: 600, speed: 220, shake: 0 },
+    id: '', classId, name: 'สกิลใหม่', icon: 'star', key: 1, reqLv: 1, cooldown: 1000, mp: 5, mult: 1, heal: 0, range: 120, aoe: false,
+    fx: { type: 'burst', color: '#5ee7ff', color2: '#ffffff', count: 24, size: 8, duration: 600, speed: 220, shake: 0 },
   };
 }
 
@@ -88,6 +89,17 @@ function fillSelects() {
   const ids = Object.keys(CLASSES);
   $('f-class').innerHTML = ids.map((c) => `<option value="${c}">${CLASSES[c].name}</option>`).join('');
   $('f-filter').innerHTML = '<option value="">ทุกอาชีพ</option>' + ids.map((c) => `<option value="${c}">${CLASSES[c].name}</option>`).join('');
+  $('f-icon').innerHTML = ICON_NAMES.map((n) => `<button type="button" data-icon="${n}" title="${n}">${icon(n)}</button>`).join('');
+  $('f-icon').addEventListener('click', (e) => {
+    const b = e.target.closest('[data-icon]');
+    if (!b) return;
+    setIcon(b.dataset.icon);
+  });
+}
+
+function setIcon(name) {
+  for (const b of $('f-icon').querySelectorAll('[data-icon]')) b.classList.toggle('on', b.dataset.icon === name);
+  if (current) current.icon = name;
 }
 
 function renderList() {
@@ -97,10 +109,9 @@ function renderList() {
   for (const s of skills.filter((x) => !filter || x.classId === filter)) {
     const el = document.createElement('div');
     el.className = 'skill-item' + (current && current.id === s.id ? ' on' : '');
-    el.innerHTML = '<span style="font-size:22px"></span><div><b></b><div class="note"></div></div>';
-    el.children[0].textContent = s.icon;
+    el.innerHTML = `<span class="ico-box">${icon(s.icon)}</span><div><b></b><small></small></div>`;
     el.querySelector('b').textContent = s.name;
-    el.querySelector('.note').textContent = `${CLASSES[s.classId].name} · ปุ่ม ${s.key}${s._builtin ? ' · ค่าเริ่มต้น' : ''}`;
+    el.querySelector('small').textContent = `${CLASSES[s.classId].name} · ปุ่ม ${s.key} · Lv ${s.reqLv || 1}${s._builtin ? ' · ค่าเริ่มต้น' : ''}`;
     el.addEventListener('click', () => select(s));
     list.appendChild(el);
   }
@@ -117,8 +128,10 @@ function select(s) {
 
 function writeForm() {
   const s = current;
-  for (const [k, id] of Object.entries(FIELDS)) $(id).value = s[k];
+  for (const [k, id] of Object.entries(FIELDS)) $(id).value = s[k] ?? '';
+  $('f-aoe').checked = !!s.aoe;
   for (const [k, id] of Object.entries(FX_FIELDS)) $(id).value = s.fx[k];
+  setIcon(s.icon);
   syncLabels();
   replay();
 }
@@ -126,13 +139,15 @@ function writeForm() {
 function readForm() {
   const num = (id) => Number($(id).value);
   current.name = $('f-name').value.trim();
-  current.icon = $('f-icon').value.trim() || '✦';
   current.classId = $('f-class').value;
   current.key = num('f-key');
+  current.reqLv = num('f-reqlv');
   current.cooldown = num('f-cooldown');
   current.mp = num('f-mp');
-  current.damage = num('f-damage');
+  current.mult = num('f-mult');
+  current.heal = num('f-heal');
   current.range = num('f-range');
+  current.aoe = $('f-aoe').checked;
   current.fx = {
     type: $('f-type').value,
     duration: num('f-duration'),

@@ -1,15 +1,16 @@
 import { CLASSES, OPTIONS, PALETTE, HAIR_COLORS, SKIN_COLORS, EYE_COLORS } from './config.js';
+import { icon } from './icons.js';
 
 // Character designer panel. Used by the in-game creator and by the Character Lab page.
-// `root` is an element that is re-rendered on every change. `opts.state` is mutated in place.
+// `root` is re-rendered on every change. `opts.state` is mutated in place.
 const TABS = [
-  ['hair', 'ทรงผม', '💇'],
-  ['face', 'หน้า', '🙂'],
-  ['skin', 'ผิว', '🎨'],
-  ['top', 'เสื้อ', '👕'],
-  ['bottom', 'กางเกง', '👖'],
-  ['shoes', 'รองเท้า', '👟'],
-  ['acc', 'เสริม', '🎀'],
+  ['hair', 'ทรงผม', 'hair'],
+  ['face', 'หน้า', 'face'],
+  ['skin', 'ผิว', 'skin'],
+  ['top', 'เสื้อ', 'shirt'],
+  ['bottom', 'กางเกง', 'pants'],
+  ['shoes', 'รองเท้า', 'shoe'],
+  ['acc', 'เสริม', 'sparkle'],
 ];
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -113,24 +114,24 @@ function render(root) {
   }
 
   const classChips = Object.keys(CLASSES).map((id) =>
-    `<button class="chip${s.classId === id ? ' on' : ''}" style="--c:${CLASSES[id].color}" data-act="class" data-val="${id}">${CLASSES[id].name}</button>`).join('');
+    `<button class="chip${s.classId === id ? ' on' : ''}" style="--c:${CLASSES[id].color}" data-act="class" data-val="${id}">${icon(CLASSES[id].icon)}<span>${CLASSES[id].name}</span></button>`).join('');
 
   root.innerHTML = `
     <div class="d-top">
       <div class="gender">
-        <button class="gbtn${s.gender === 'male' ? ' on' : ''}" data-act="gender" data-val="male">♂ ชาย</button>
-        <button class="gbtn${s.gender === 'female' ? ' on' : ''}" data-act="gender" data-val="female">♀ หญิง</button>
+        <button class="gbtn${s.gender === 'male' ? ' on' : ''}" data-act="gender" data-val="male">ชาย</button>
+        <button class="gbtn${s.gender === 'female' ? ' on' : ''}" data-act="gender" data-val="female">หญิง</button>
       </div>
-      <button class="btn-ghost small" data-act="rand">🎲 สุ่ม</button>
+      <button class="btn-ghost sm" data-act="rand">สุ่มหน้าตา</button>
     </div>
     ${o.showName ? `<input class="name-input" data-field="name" maxlength="12" placeholder="ชื่อตัวละคร (2-12 ตัวอักษร)" value="${esc(s.name || '')}">` : ''}
     <div class="classes">${classChips}</div>
-    <div class="d-tabs">${TABS.map(([id, label, icon]) =>
-      `<button class="dtab${tab === id ? ' on' : ''}" data-act="tab" data-val="${id}"><span>${icon}</span>${label}</button>`).join('')}</div>
+    <div class="d-tabs">${TABS.map(([id, label, ic]) =>
+      `<button class="dtab${tab === id ? ' on' : ''}" data-act="tab" data-val="${id}">${icon(ic)}<span>${label}</span></button>`).join('')}</div>
     <div class="d-body">${body}</div>
     <p class="error d-error"></p>
     <div class="d-foot">
       <button class="btn-ghost" data-act="back">${esc(o.backText || 'ย้อนกลับ')}</button>
-      <button class="btn-yellow" data-act="confirm">${esc(o.confirmText || 'ยืนยัน')}</button>
+      <button class="btn-primary" data-act="confirm">${esc(o.confirmText || 'ยืนยัน')}</button>
     </div>`;
 }

@@ -3,10 +3,12 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+  <meta name="theme-color" content="#060a16">
   <title>ดินแดนสวรรค์ · Sky Realm</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>⚔️</text></svg>">
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><path d='M12 2l3 7 7 1-5.5 5 1.7 7.5L12 18.2 5.8 22.5 7.5 15 2 10l7-1z' fill='%235ee7ff'/></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Prompt:wght@500;700;800&family=Sarabun:wght@400;700&display=swap">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&display=swap">
   <link rel="stylesheet" href="css/style.css">
   <script type="importmap">
     { "imports": {
@@ -21,60 +23,66 @@
   <div id="ui">
     <!-- splash -->
     <section id="splash" class="screen active">
-      <div class="splash-logo">
-        <div class="logo-title">ดินแดนสวรรค์</div>
-        <div class="logo-sub">SKY REALM</div>
+      <div class="splash-mark">
+        <svg class="logo-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"><path d="M12 2l3 7 7 1-5.5 5 1.7 7.5L12 18.2 5.8 22.5 7.5 15 2 10l7-1z"/></svg>
+        <h1>ดินแดนสวรรค์</h1>
+        <p>SKY REALM</p>
       </div>
       <div class="progress"><div id="splash-bar"></div></div>
-      <p class="tip" id="splash-tip">กำลังโหลดข้อมูล...</p>
+      <p class="tip" id="splash-tip">กำลังเตรียมโลก...</p>
     </section>
 
     <!-- login -->
     <section id="login" class="screen">
       <div class="brand">
-        <div class="logo-title big">ดินแดนสวรรค์</div>
-        <div class="logo-sub">SKY REALM · เกม MMORPG บนเว็บ</div>
+        <div class="brand-mark"><svg class="logo-svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><path d="M12 2l3 7 7 1-5.5 5 1.7 7.5L12 18.2 5.8 22.5 7.5 15 2 10l7-1z"/></svg></div>
+        <h1>ดินแดนสวรรค์</h1>
+        <p class="tagline">MMORPG บนเว็บ · ล่ามอนสเตอร์ · ทำภารกิจ · ออกผจญภัย</p>
+        <ul class="features">
+          <li>ออโต้ล่ามอนสเตอร์</li>
+          <li>ภารกิจและเนื้อเรื่อง</li>
+          <li>3 แมพ พร้อมพอร์ทเชื่อมโยง</li>
+        </ul>
       </div>
-      <div class="login-panel panel">
+      <div class="login-card glass">
         <h2>เข้าสู่เกม</h2>
         <div id="google-btn" class="google-slot"></div>
-        <button class="btn-yellow wide" id="btn-guest">เล่นแบบ Guest</button>
+        <button class="btn-primary wide" id="btn-guest">เล่นทันทีแบบ Guest</button>
         <p class="hint" id="login-hint"></p>
         <p class="error" id="login-error"></p>
       </div>
-      <div class="bottom-links">
-        <a class="btn-ghost small" href="character-lab.html">Character Lab</a>
-        <a class="btn-ghost small" href="skill-lab.html">Skill Lab</a>
-      </div>
+      <nav class="tool-links">
+        <a class="btn-ghost sm" href="character-lab.html">Character Lab</a>
+        <a class="btn-ghost sm" href="skill-lab.html">Skill Lab</a>
+      </nav>
     </section>
 
     <!-- character select -->
     <section id="charselect" class="screen">
-      <aside class="side-panel panel">
-        <div class="panel-head">เลือกตัวละคร</div>
-        <div class="server-row"><span class="server-badge">🌿</span><b>ดินแดนสวรรค์</b><span class="server-tag">เซิร์ฟเวอร์ 1</span></div>
+      <aside class="side-panel glass">
+        <header class="panel-head"><h2>เลือกตัวละคร</h2><span class="server-tag">เซิร์ฟเวอร์ 1</span></header>
         <div id="char-list" class="char-list"></div>
-        <div class="select-foot">
-          <button class="icon-btn" id="btn-delete-char" title="ลบตัวละคร"><span class="ico">🗑️</span>ลบ</button>
-          <button class="btn-yellow big" id="btn-start">เริ่มเกม</button>
-          <button class="icon-btn" id="btn-new-char" title="สร้างตัวละคร"><span class="ico">＋</span>สร้าง</button>
-        </div>
+        <footer class="select-foot">
+          <button class="btn-ghost sm" id="btn-delete-char">ลบ</button>
+          <button class="btn-ghost sm" id="btn-new-char">สร้างใหม่</button>
+          <button class="btn-primary big" id="btn-start">เข้าเล่น</button>
+        </footer>
         <p class="error" id="charselect-error"></p>
       </aside>
       <div class="bottom-left-btns">
-        <button class="btn-ghost small" id="btn-logout">🚪 ออกจากเกม</button>
+        <button class="btn-ghost sm" id="btn-logout">ออกจากระบบ</button>
       </div>
     </section>
 
     <!-- creator -->
     <section id="creator" class="screen">
-      <div class="designer panel" id="designer"></div>
+      <div class="designer glass" id="designer"></div>
     </section>
 
     <!-- enter-world loader -->
     <section id="enter-loader" class="screen">
-      <div class="enter-box panel">
-        <h2 id="enter-title">กำลังเข้าสู่ ดินแดนสวรรค์</h2>
+      <div class="enter-box glass">
+        <h2 id="enter-title">กำลังเข้าสู่โลก</h2>
         <div class="progress wide"><div id="enter-bar"></div></div>
         <p class="tip" id="enter-tip"></p>
       </div>
@@ -82,35 +90,67 @@
 
     <!-- world HUD -->
     <section id="game" class="screen">
-      <div class="hud-player panel">
-        <div class="portrait"><canvas id="portrait" width="128" height="128"></canvas></div>
-        <div class="pbars">
-          <div class="pname"><span id="hud-name"></span><span class="lv" id="hud-lv"></span></div>
-          <div class="pclass" id="hud-class"></div>
+      <div id="hud-card" class="glass card-hud">
+        <div class="portrait"><canvas id="hud-portrait" width="112" height="112"></canvas></div>
+        <div class="card-info">
+          <div class="name-row"><b id="hud-name"></b><span class="lv" id="hud-lv"></span></div>
+          <div class="cls" id="hud-class"></div>
           <div class="bar hp"><div id="bar-hp"></div><span id="txt-hp"></span></div>
           <div class="bar mp"><div id="bar-mp"></div><span id="txt-mp"></span></div>
+          <div class="bar exp"><div id="bar-exp"></div><span id="txt-exp"></span></div>
         </div>
       </div>
 
-      <div class="hud-quest panel">
-        <div class="quest-title">📜 เส้นหลัก: เจตนารมณ์แห่งสวรรค์</div>
-        <div class="quest-step" id="quest-step"></div>
+      <div id="hud-quest" class="glass quest-track" hidden>
+        <div class="qt-kicker">ภารกิจ</div>
+        <div class="qt-title" id="q-title"></div>
+        <div class="qt-step" id="q-step"></div>
+        <div class="qt-count" id="q-count"></div>
       </div>
 
-      <div class="hud-topright" id="hud-topright"></div>
-      <div class="hud-bottomleft" id="hud-bottomleft"></div>
-      <div class="hud-skills" id="hud-skills"></div>
+      <div id="hud-target" class="glass target" hidden>
+        <div class="t-head"><b id="t-name"></b><span id="t-lv"></span></div>
+        <div class="bar target-bar"><div id="t-bar"></div></div>
+      </div>
+
+      <div class="hud-right">
+        <div class="menu-row" id="hud-menu"></div>
+        <button class="btn-ghost sm exit" id="btn-back-select">เลือกตัวละคร</button>
+        <div id="hud-minimap" class="glass minimap">
+          <canvas id="minimap" width="176" height="176"></canvas>
+          <span id="map-name"></span>
+        </div>
+      </div>
+
+      <div class="hud-dock glass">
+        <button class="dock-btn auto" id="dock-auto" data-act="auto" title="ออโต้ (T)">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M4 12a8 8 0 0 1 14-5.3M20 12a8 8 0 0 1-14 5.3"/><path d="M18 3v4h-4M6 21v-4h4"/></svg>
+          <span id="dock-auto-label">ออโต้ ปิด</span>
+        </button>
+        <button class="dock-btn potion" id="dock-potion" data-act="potion" title="ยาฟื้นพลัง (Q)">
+          <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M9 3h6M10 3v4l-4 6a4 4 0 0 0 3.5 6h5A4 4 0 0 0 18 13l-4-6V3"/><path d="M8 14h8"/></svg>
+          <span id="dock-potion-count">0</span>
+        </button>
+        <span class="dock-sep"></span>
+        <div id="dock-skills" class="dock-skills"></div>
+      </div>
 
       <div class="hud-chat">
         <div id="chat-log"></div>
         <input id="chat-input" maxlength="120" placeholder="กด Enter เพื่อพิมพ์แชต">
       </div>
 
-      <div class="window panel" id="window" hidden>
-        <div class="window-head"><span id="window-title"></span><button id="window-close" class="close">✕</button></div>
+      <div id="loot" class="loot-stack"></div>
+      <div id="toasts" class="toasts"></div>
+
+      <div class="window glass" id="window" hidden>
+        <header class="window-head"><div id="window-title" class="win-title"></div><button id="window-close" class="close" data-act="close" aria-label="ปิด"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></header>
         <div class="window-body" id="window-body"></div>
       </div>
-      <div class="toast panel" id="toast" hidden></div>
+
+      <div id="banner" class="banner"><div id="banner-title"></div><div id="banner-sub"></div></div>
+      <div id="vignette" class="vignette"></div>
+      <div id="fade" class="fade"></div>
     </section>
   </div>
 

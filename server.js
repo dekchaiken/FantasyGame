@@ -106,6 +106,41 @@ const clampInt = (v, min, max, def) => {
   return Math.min(max, Math.max(min, n));
 };
 
+// Keep in sync with public/js/progress.js (normalize). Unknown ids are dropped, numbers are clamped.
+const PROGRESS_ITEMS = ['potion_hp', 'essence', 'herb', 'wolf_fang', 'crystal_ore', 'sword_iron', 'sword_flame', 'armor_leaf', 'armor_golem'];
+const PROGRESS_MAPS = ['town', 'forest', 'mine'];
+const PROGRESS_QUESTS = { main_1: 6, side_wolf: 3, side_herb: 3 };
+function sanitizeProgress(p = {}) {
+  const inv = {};
+  for (const [id, n] of Object.entries(p.inv || {})) {
+    if (PROGRESS_ITEMS.includes(id) && Number.isInteger(n) && n > 0) inv[id] = Math.min(999, n);
+  }
+  const quests = {};
+  for (const [id, q] of Object.entries(p.quests || {})) {
+    if (!(id in PROGRESS_QUESTS) || !q || typeof q !== 'object') continue;
+    quests[id] = {
+      status: q.status === 'done' ? 'done' : 'active',
+      step: clampInt(q.step, 0, PROGRESS_QUESTS[id], 0),
+      count: clampInt(q.count, 0, 9999, 0),
+    };
+  }
+  const pos = Array.isArray(p.pos) && p.pos.length === 2 && p.pos.every(Number.isFinite) ? p.pos : null;
+  return {
+    v: 2,
+    level: clampInt(p.level, 1, 30, 1),
+    exp: clampInt(p.exp, 0, 1e9, 0),
+    gold: clampInt(p.gold, 0, 1e9, 0),
+    inv,
+    equip: {
+      weapon: p.equip?.weapon === 'sword_iron' || p.equip?.weapon === 'sword_flame' ? p.equip.weapon : null,
+      armor: p.equip?.armor === 'armor_leaf' || p.equip?.armor === 'armor_golem' ? p.equip.armor : null,
+    },
+    quests,
+    map: PROGRESS_MAPS.includes(p.map) ? p.map : 'town',
+    pos,
+  };
+}
+
 // Keep in sync with public/js/config.js (OPTIONS and DEFAULT_APPEARANCE).
 function sanitizeAppearance(a = {}) {
   const part = (p, styles, defColor) => ({
@@ -139,6 +174,9 @@ function sanitizeFx(fx = {}) {
   };
 }
 
+// Icon names come from public/js/icons.js (SVG, no emoji).
+const SKILL_ICONS = ['sword', 'dagger', 'staff', 'book', 'fire', 'snow', 'holy', 'plus', 'slash', 'whirl', 'dash', 'star', 'heart', 'bolt', 'shield', 'gem', 'leaf', 'potion', 'skull', 'portal'];
+
 function sanitizeSkill(s = {}) {
   if (!CLASS_IDS.includes(s.classId)) throw Object.assign(new Error('classId ไม่ถูกต้อง'), { status: 400 });
   const name = clean(s.name, 40);
@@ -147,7 +185,7 @@ function sanitizeSkill(s = {}) {
     id: clean(s.id, 60) || uid('sk_'),
     classId: s.classId,
     name,
-    icon: clean(s.icon, 4) || '✦',
+    icon: SKILL_ICONS.includes(s.icon) ? s.icon : 'star',
     key: clampInt(s.key, 1, 6, 1),
     cooldown: clampInt(s.cooldown, 100, 60000, 1000),
     mp: clampInt(s.mp, 0, 999, 5),
@@ -261,6 +299,7 @@ async function handleApi(req, res, url) {
     if (m === 'PUT') {
       const body = await readBody(req);
       if (body.appearance) ch.appearance = sanitizeAppearance(body.appearance);
+      if (body.progress) ch.progress = sanitizeProgress(body.progress);
       saveDb();
       return send(res, 200, { character: ch });
     }
