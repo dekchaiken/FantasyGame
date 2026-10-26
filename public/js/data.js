@@ -263,6 +263,19 @@ export const MAPS = {
       { name: 'ศาลาร้าง', x: 28, z: 24, r: 11, mons: [['frost_golem', 2], ['cave_bat', 4]] },
     ],
   },
+  herbfield: {
+    kind: 'gather', name: 'ทุ่งสมุนไพร', levelText: 'เลเวล 1-10', minLevel: 1, size: 114, biome: 'herb', sky: '#e6ffd9',
+    spawns: [], nodes: [['herb', 22], ['essence', 8]],
+  },
+  mountain: {
+    kind: 'hunt', name: 'ไหล่เขาหินเทือก', levelText: 'เลเวล 15-25', minLevel: 15, size: 114, biome: 'mountain', sky: '#dbe7f0',
+    zones: [
+      { name: 'เส้นทางเขา', x: -36, z: 0, r: 13, mons: [['golem', 4], ['bat', 3]] },
+      { name: 'โพรงหิน', x: 36, z: 26, r: 13, mons: [['frost_golem', 3], ['cave_bat', 4]] },
+      { name: 'ยอดเขา', x: 30, z: -30, r: 12, mons: [['gold_golem', 2], ['cave_bat', 3]] },
+    ],
+    spawns: [], nodes: [['crystal_ore', 14]],
+  },
   dungeon: { name: 'ดันเจี้ยน', levelText: '', minLevel: 1, size: 36, biome: 'dungeon', sky: '#2a2440', spawns: [], hidden: true },
 };
 
@@ -303,9 +316,13 @@ export const PORTALS = {
   town: [{ x: 0, z: -17.5, to: 'forest', arrive: [0, -13], label: 'ป่าวิญญาณ' }],
   forest: [
     { x: 0, z: -55, to: 'town', arrive: [0, -14], label: 'ดินแดนสวรรค์' },
+    { x: -55, z: 0, to: 'herbfield', arrive: [52, 0], label: 'ทุ่งสมุนไพร' },
     { x: 55, z: 0, to: 'meadow', arrive: [-52, 0], label: 'ทุ่งแสงทอง' },
   ],
+  herbfield: [{ x: 55, z: 0, to: 'forest', arrive: [-52, 0], label: 'ป่าวิญญาณ' }],
+  mountain: [{ x: 0, z: -55, to: 'meadow', arrive: [0, 52], label: 'ทุ่งแสงทอง' }],
   meadow: [
+    { x: 0, z: 55, to: 'mountain', arrive: [0, -52], label: 'ไหล่เขาหินเทือก' },
     { x: -55, z: 0, to: 'forest', arrive: [52, 0], label: 'ป่าวิญญาณ' },
     { x: 55, z: 0, to: 'mine', arrive: [-52, 0], label: 'เหมืองลาวาร้อน' },
   ],

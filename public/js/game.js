@@ -24,7 +24,9 @@ const TOWN_LIMIT = 19;
 const NPC_RANGE = 2.6;
 const SAVE_EVERY = 6;
 const PORTAL_RANGE = 1.3;
-const PORTAL_COLOR = { town: '#ffd166', forest: '#5ee7ff', meadow: '#9be36b', mine: '#ff6a3d', ruin: '#c58bff' };
+const PORTAL_COLOR = { town: '#ffd166', forest: '#5ee7ff', meadow: '#9be36b', mine: '#ff6a3d', ruin: '#c58bff', herbfield: '#7fd16a', mountain: '#b8c4cc' };
+const NODE_RESPAWN = 25; // seconds before a harvested gathering node comes back
+const NODE_COLOR = { herb: '#7fe05a', essence: '#7dd3ff', crystal_ore: '#ffd166' };
 const SHIELD_TIME = 5;
 const FX_BASIC_DEFAULT = {
   swordsman: { type: 'slash', color: '#ffd166', color2: '#ffffff', count: 1, size: 70, duration: 240, speed: 0, shake: 1 },
@@ -246,6 +248,17 @@ export const Game = {
     for (const [mid, count] of def.spawns || []) {
       for (let i = 0; i < count; i++) world.monsters.push(new Monster(this.scene, mid, MONSTERS[mid], freeSpot(world)));
     }
+    // gathering nodes: harvested with E, back after NODE_RESPAWN seconds
+    world.nodes = [];
+    for (const [item, count] of def.nodes || []) {
+      for (let i = 0; i < count; i++) {
+        const { x, z } = freeSpot(world);
+        const mesh = new THREE.Mesh(new THREE.OctahedronGeometry(0.35, 0), new THREE.MeshStandardMaterial({ color: NODE_COLOR[item], emissive: NODE_COLOR[item], emissiveIntensity: 0.8 }));
+        mesh.position.set(x, 0.5, z);
+        this.scene.add(mesh);
+        world.nodes.push({ item, x, z, mesh, ready: true, t: 0 });
+      }
+    }
 
     const g = this.hero.group;
     if (g.parent) g.parent.remove(g);
@@ -450,6 +463,7 @@ export const Game = {
     if (this.questAuto) this.questTick(dt);
     this.runTick(dt);
     this.updateSpirit();
+    this.updateNodes(dt);
 
     const len = Math.hypot(ix, iz);
     h.moving = len > 0;
@@ -1227,8 +1241,33 @@ export const Game = {
   // ---------- NPCs ----------
   interactNearest() {
     const p = this.hero.group.position;
+    const node = (this.world.nodes || []).find((x) => x.ready && Math.hypot(x.x - p.x, x.z - p.z) < NPC_RANGE);
+    if (node) { this.harvest(node); return; }
     const n = this.world.npcs.find((x) => Math.hypot(x.x - p.x, x.z - p.z) < NPC_RANGE);
     if (n) this.talkTo(n.id);
+  },
+
+  harvest(node) {
+    const mat = MATERIALS[node.item];
+    const n = 1 + Math.floor(Math.random() * 2);
+    P.addMat(this.p, node.item, n);
+    const exp = 8 + this.p.level * 2;
+    node.ready = false;
+    node.t = NODE_RESPAWN;
+    node.mesh.visible = false;
+    this.floatText(node.x, 1.2, node.z, `+${n} ${mat.name}`, '#8fe39a', true);
+    if (P.addExp(this.p, exp)) { this.refreshStats(true); Hud.toast(`เลเวลอัป! ตอนนี้เลเวล ${this.p.level}`, 'gold'); }
+    Sfx.play('learn');
+    this.dirty = true;
+    Hud.refresh(this);
+  },
+
+  updateNodes(dt) {
+    for (const node of this.world?.nodes || []) {
+      if (node.ready) continue;
+      node.t -= dt;
+      if (node.t <= 0) { node.ready = true; node.mesh.visible = true; }
+    }
   },
 
   talkTo(npcId) {

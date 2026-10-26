@@ -25,6 +25,12 @@ const BIOMES = {
   meadow: {
     ground: ['#9ccf5f', '#8ebf55', '#b2dc73'], path: '#d6b97a', fog: '#fff0c2', lava: null,
   },
+  herb: {
+    ground: ['#7fd16a', '#6cc25a', '#93de7a'], path: '#c9b07a', fog: '#e6ffd9', lava: null,
+  },
+  mountain: {
+    ground: ['#8c9196', '#7a8086', '#9ea4aa'], path: '#6b6358', fog: '#dbe7f0', lava: null,
+  },
   dungeon: {
     ground: ['#4a3f66', '#3f3558', '#5a4d78'], path: '#2a2440', fog: '#2a2440', lava: '#c084fc',
   },
@@ -117,7 +123,7 @@ export function buildField(scene, mapId, def, avoid) {
     const z = (rnd() * 2 - 1) * (half - 2.5);
     if (!avoidOk(x, z)) continue;
     placed++;
-    if (def.biome === 'forest') addTree(scene, solids, x, z, 0.8 + rnd() * 0.5, rnd);
+    if (def.biome === 'forest' || def.biome === 'herb') addTree(scene, solids, x, z, 0.8 + rnd() * 0.5, rnd);
     else addSpire(scene, solids, x, z, 0.8 + rnd() * 0.7, rnd);
   }
 
@@ -125,7 +131,7 @@ export function buildField(scene, mapId, def, avoid) {
   const edge = half - 0.5;
   for (let t = -half; t <= half; t += 2.2) {
     for (const [x, z] of [[t, -edge], [t, edge], [-edge, t], [edge, t]]) {
-      if (def.biome === 'forest') addTree(scene, solids, x, z, 1.1, rnd);
+      if (def.biome === 'forest' || def.biome === 'herb') addTree(scene, solids, x, z, 1.1, rnd);
       else addSpire(scene, solids, x, z, 1.2, rnd);
     }
   }
