@@ -1,52 +1,51 @@
-// Shared game data: classes, appearance options, default skills.
-// Default skills are used when the server has no custom skills for a class.
-const CLASSES = {
-  swordsman: {
-    name: 'นักดาบ', color: '#c0392b', weapon: 'sword',
-    desc: 'ถึกทน ฟันระยะใกล้ พลังโจมตีสูง',
-  },
-  assassin: {
-    name: 'นักฆ่า', color: '#2c3e50', weapon: 'dagger',
-    desc: 'คล่องตัว ดาเมจสูงจากด้านหลัง วิ่งหลบได้ไว',
-  },
-  mage: {
-    name: 'นักเวทย์', color: '#8e44ad', weapon: 'staff',
-    desc: 'ใช้เวทระยะไกล พลัง MP สูง ป้อมน้อย',
-  },
-  priest: {
-    name: 'นักพรต', color: '#f1c40f', weapon: 'book',
-    desc: 'รักษาและค้ำจุนทีม ใช้พลังศักดิ์สิทธิ์โจมตี',
-  },
+// Shared game data. Appearance options are stored as indexes so the server can validate them.
+export const CLASSES = {
+  swordsman: { name: 'นักดาบ', color: '#e5484d', weapon: 'sword', desc: 'ถึกทน ฟันระยะใกล้ พลังโจมตีสูง' },
+  assassin: { name: 'นักฆ่า', color: '#4b5d7a', weapon: 'dagger', desc: 'คล่องตัว วิ่งหลบได้ไว ดาเมจสูงจากด้านหลัง' },
+  mage: { name: 'นักเวทย์', color: '#9b59d6', weapon: 'staff', desc: 'เวทระยะไกล MP สูง ป้อมน้อย' },
+  priest: { name: 'นักพรต', color: '#f4a300', weapon: 'book', desc: 'รักษาและค้ำจุนทีม พลังศักดิ์สิทธิ์' },
 };
 
-const APPEARANCE_OPTIONS = {
-  hairStyle: [
-    { v: 0, label: 'สั้น' },
-    { v: 1, label: 'ยาว' },
-    { v: 2, label: 'หางแฝด' },
-    { v: 3, label: 'ฟูชี้' },
-  ],
-  hair: ['#3b2a20', '#1a1a2e', '#e8c26b', '#ff7aa2', '#7fd1ff', '#c9b6ff', '#f0f0f0', '#ff8c42'],
-  skin: ['#ffe0c8', '#f7c9a0', '#e0a77a', '#b97a52', '#fff0f5'],
-  outfit: ['#4a7bd0', '#d0485a', '#3fae6a', '#8a5cd6', '#f0b43c', '#2f2f3f', '#ffffff'],
-  eyes: [
-    { v: 0, label: 'กลม' },
-    { v: 1, label: 'เรียว' },
-    { v: 2, label: 'ใส' },
-  ],
-  accessory: [
-    { v: 0, label: 'ไม่มี' },
-    { v: 1, label: 'ริบบิ้น' },
-    { v: 2, label: 'หมวก' },
-  ],
+export const PALETTE = ['#ffffff', '#2b2b3a', '#e5484d', '#f4c430', '#3fc27a', '#4fa3ff', '#4b5d7a', '#9b59d6', '#ff7aa2', '#ff8a3d', '#8a5a32', '#c9d6e8'];
+export const HAIR_COLORS = ['#3b2a20', '#1a1a2e', '#e8c26b', '#ff7aa2', '#7fd1ff', '#9b7bd9', '#f0f0f0', '#ff8c42', '#3fc27a', '#8a2be2'];
+export const SKIN_COLORS = ['#ffe0c8', '#f7c9a0', '#e0a77a', '#b97a52', '#fff0f5', '#8d5a3b'];
+export const EYE_COLORS = ['#3b6fd8', '#2b2b3a', '#8a5cd6', '#3fc27a', '#e5484d', '#b97a52'];
+
+export const OPTIONS = {
+  hairStyle: ['สั้นทรงเก๋', 'ยาวตรง', 'หางม้า', 'ชี้ฟู', 'หางแฝด', 'มวยผม'],
+  faceStyle: ['กลมน่ารัก', 'ตาเรียว', 'ตาใส', 'ตาง่วง'],
+  topStyle: ['เสื้อยืด', 'เสื้อลายแถบ', 'แจ็กเก็ต', 'เสื้อเอมบเลม'],
+  bottomStyle: ['กางเกงขาสั้น', 'กางเกงขายาว', 'กระโปรง'],
+  shoeStyle: ['สนีกเกอร์', 'บู้ต', 'รองเท้าแตะ'],
+  accessory: ['ไม่มี', 'ริบบิ้น', 'หมวก', 'แว่นตา'],
 };
 
-const DEFAULT_APPEARANCE = {
-  skin: '#ffe0c8', hair: '#3b2a20', hairStyle: 0, eyes: 0, outfit: '#4a7bd0', accessory: 0,
+export const DEFAULT_APPEARANCE = {
+  hairStyle: 0,
+  hair: '#9b7bd9',
+  faceStyle: 0,
+  eyeColor: '#3b6fd8',
+  skin: '#ffe0c8',
+  top: { style: 0, color: '#ffffff' },
+  bottom: { style: 0, color: '#6a4fb0' },
+  shoes: { style: 0, color: '#4fa3ff' },
+  accessory: 0,
 };
 
-// Starter skills per class. fx = visual effect config (see effects.js).
-const DEFAULT_SKILLS = {
+// Fills in any missing appearance fields (older saved characters, partial data).
+export function fullAppearance(a = {}) {
+  const d = DEFAULT_APPEARANCE;
+  return {
+    ...d,
+    ...a,
+    top: { ...d.top, ...a.top },
+    bottom: { ...d.bottom, ...a.bottom },
+    shoes: { ...d.shoes, ...a.shoes },
+  };
+}
+
+// Starter skills per class. fx = visual effect (see effects.js). range is in pixels of the 2D design, converted in game.js.
+export const DEFAULT_SKILLS = {
   swordsman: [
     { id: 'sw_slash', classId: 'swordsman', name: 'ฟันดาบ', icon: '⚔️', key: 1, cooldown: 900, mp: 4, damage: 40, range: 110,
       fx: { type: 'slash', color: '#ffd166', color2: '#ffffff', count: 1, size: 70, duration: 260, speed: 0, shake: 4 } },
@@ -73,8 +72,7 @@ const DEFAULT_SKILLS = {
   ],
 };
 
-// Menus for the HUD. Each opens a window with placeholder content to be filled later.
-const HUD_TOP_MENUS = [
+export const HUD_TOP_MENUS = [
   { id: 'event', icon: '🎁', label: 'กิจกรรม' },
   { id: 'welfare', icon: '🏆', label: 'สวัสดิการ' },
   { id: 'starter', icon: '🎒', label: 'แพ็กเริ่มต้น' },
@@ -82,7 +80,7 @@ const HUD_TOP_MENUS = [
   { id: 'mail', icon: '✉️', label: 'จดหมาย' },
 ];
 
-const HUD_BOTTOM_MENUS = [
+export const HUD_BOTTOM_MENUS = [
   { id: 'equip', icon: '🛡️', label: 'อุปกรณ์' },
   { id: 'skill', icon: '📖', label: 'สกิล' },
   { id: 'pet', icon: '🐾', label: 'สัตว์เลี้ยง' },

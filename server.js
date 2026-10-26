@@ -106,14 +106,22 @@ const clampInt = (v, min, max, def) => {
   return Math.min(max, Math.max(min, n));
 };
 
+// Keep in sync with public/js/config.js (OPTIONS and DEFAULT_APPEARANCE).
 function sanitizeAppearance(a = {}) {
+  const part = (p, styles, defColor) => ({
+    style: clampInt(p?.style, 0, styles - 1, 0),
+    color: isHex(p?.color) ? p.color : defColor,
+  });
   return {
+    hairStyle: clampInt(a.hairStyle, 0, 5, 0),
+    hair: isHex(a.hair) ? a.hair : '#9b7bd9',
+    faceStyle: clampInt(a.faceStyle, 0, 3, 0),
+    eyeColor: isHex(a.eyeColor) ? a.eyeColor : '#3b6fd8',
     skin: isHex(a.skin) ? a.skin : '#ffe0c8',
-    hair: isHex(a.hair) ? a.hair : '#3b2a20',
-    hairStyle: clampInt(a.hairStyle, 0, 3, 0),
-    eyes: clampInt(a.eyes, 0, 2, 0),
-    outfit: isHex(a.outfit) ? a.outfit : '#4a7bd0',
-    accessory: clampInt(a.accessory, 0, 2, 0),
+    top: part(a.top, 4, '#ffffff'),
+    bottom: part(a.bottom, 3, '#6a4fb0'),
+    shoes: part(a.shoes, 3, '#4fa3ff'),
+    accessory: clampInt(a.accessory, 0, 3, 0),
   };
 }
 

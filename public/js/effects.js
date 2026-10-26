@@ -1,209 +1,216 @@
-// Skill effect runtime. A skill's `fx` config (type, colors, count, ...) is
-// turned into particles / rings / beams. The same runtime is used by the
-// Skill Lab preview, so what you design there is what plays in the world.
+import * as THREE from 'three';
+
+// 3D skill effects. A skill's `fx` config (type, colours, count, size, duration, speed, shake)
+// becomes rings, arcs, beams, orbs and particles. The Skill Lab uses the same code,
+// so what you design there is what plays in the world.
 //
-// fx.type:
-//   burst      particles fly out from the caster
-//   nova       expanding ring + particles
-//   slash      arc sweep in the facing direction
-//   projectile orb travels in the facing direction, bursts on arrival
-//   beam       streak in the facing direction
-//   heal       particles rise upward
-class Effects {
-  constructor() {
+// fx.type: burst | nova | slash | projectile | beam | heal
+const ADD = THREE.AdditiveBlending;
+const glow = (color, opacity = 1) =>
+  new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: ADD });
+
+export class Effects {
+  constructor(scene) {
+    this.scene = scene;
     this.items = [];
-    this.texts = []; // floating damage / status text
   }
 
-  // dx, dy: unit direction (for slash / projectile / beam). range: px travel.
-  spawn(fx, x, y, { dx = 1, dy = 0, range = 120 } = {}) {
-    const now = performance.now();
-    const f = { ...fx, x, y, dx, dy, range, born: now };
-    if (fx.type === 'projectile') {
-      f.px = x; f.py = y;
-      f.vx = dx * fx.speed; f.vy = dy * fx.speed;
-      f.life = Math.min(fx.duration, (range / Math.max(fx.speed, 1)) * 1000);
-    } else {
-      f.life = fx.duration;
-    }
-    f.particles = makeParticles(f);
-    this.items.push(f);
-    return f;
+  // origin: THREE.Vector3 at the caster's chest. dir: {x, z} unit vector. range: world units.
+  spawn(fx, origin, dir = { x: 0, z: 1 }, range = 3) {
+    const d = new THREE.Vector3(dir.x, 0, dir.z);
+    if (d.lengthSq() === 0) d.set(0, 0, 1);
+    d.normalize();
+    const root = new THREE.Group();
+    root.position.copy(origin);
+    root.rotation.y = Math.atan2(d.x, d.z);
+    this.scene.add(root);
+    const item = build(fx, root, range, this);
+    item.age = 0;
+    item.life = item.life ?? Math.max(0.15, fx.duration / 1000);
+    this.items.push(item);
+    return item;
   }
 
-  text(x, y, str, color = '#fff', big = false) {
-    this.texts.push({ x, y, str, color, big, born: performance.now(), life: 900 });
-  }
-
-  // Called each frame. Projectiles spawn their own burst on arrival.
   update(dt) {
-    const now = performance.now();
-    for (const f of this.items) {
-      if (f.type === 'projectile' && !f.done) {
-        const k = dt / 1000;
-        f.px += f.vx * k;
-        f.py += f.vy * k;
-        if (now - f.born >= f.life) {
-          f.done = true;
-          this.spawn({ ...f, type: 'burst', count: Math.round(f.count * 0.6), speed: 160, duration: 450 }, f.px, f.py);
-        }
-      }
-      for (const p of f.particles) {
-        p.x += p.vx * dt / 1000;
-        p.y += p.vy * dt / 1000;
-        p.vy += (f.type === 'heal' ? -30 : 120) * dt / 1000;
+    for (const it of this.items) {
+      if (it.removed) continue;
+      it.age += dt;
+      const k = Math.min(1, it.age / it.life);
+      it.tick?.(dt, k);
+      if (k >= 1) {
+        it.done?.();
+        this.remove(it);
       }
     }
-    this.items = this.items.filter((f) => now - f.born < f.life + 200);
-    this.texts = this.texts.filter((t) => now - t.born < t.life);
+    this.items = this.items.filter((it) => !it.removed);
   }
 
-  draw(ctx, cam) {
-    const now = performance.now();
-    for (const f of this.items) {
-      const age = (now - f.born) / f.life;
-      if (f.type === 'projectile') {
-        // the orb is drawn while flying; its impact burst is a separate item
-        if (!f.done) drawOrb(ctx, cam, f);
-        continue;
-      }
-      if (f.type === 'slash') drawSlash(ctx, cam, f, age);
-      if (f.type === 'nova') drawRing(ctx, cam, f, age);
-      if (f.type === 'beam') drawBeam(ctx, cam, f, age);
-      drawParticles(ctx, cam, f, age);
-    }
-    for (const t of this.texts) {
-      const age = (now - t.born) / t.life;
-      ctx.globalAlpha = 1 - age;
-      ctx.font = (t.big ? 'bold 22px ' : 'bold 15px ') + 'Sarabun, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = '#000';
-      ctx.fillText(t.str, t.x - cam.x + 1, t.y - cam.y - age * 30 + 1);
-      ctx.fillStyle = t.color;
-      ctx.fillText(t.str, t.x - cam.x, t.y - cam.y - age * 30);
-      ctx.globalAlpha = 1;
-    }
-  }
-}
-
-function makeParticles(f) {
-  const out = [];
-  const n = Math.max(1, f.count);
-  for (let i = 0; i < n; i++) {
-    const ang = (i / n) * Math.PI * 2 + Math.random() * 0.4;
-    const sp = f.speed * (0.5 + Math.random() * 0.7);
-    out.push({
-      x: f.x, y: f.y,
-      vx: Math.cos(ang) * sp,
-      vy: Math.sin(ang) * sp,
-      c: i % 2 ? f.color : f.color2,
-      r: f.size * (0.6 + Math.random() * 0.6),
+  remove(it) {
+    if (it.removed) return;
+    it.removed = true;
+    this.scene.remove(it.root);
+    it.root.traverse((o) => {
+      o.geometry?.dispose();
+      o.material?.dispose();
     });
   }
-  return out;
-}
 
-function drawParticles(ctx, cam, f, age) {
-  ctx.globalAlpha = Math.max(0, 1 - age);
-  for (const p of f.particles) {
-    ctx.fillStyle = p.c;
-    ctx.beginPath();
-    ctx.arc(p.x - cam.x, p.y - cam.y, Math.max(1, p.r * (1 - age * 0.5)), 0, Math.PI * 2);
-    ctx.fill();
+  clear() {
+    for (const it of this.items) this.remove(it);
+    this.items = [];
   }
-  ctx.globalAlpha = 1;
 }
 
-function drawRing(ctx, cam, f, age) {
-  ctx.globalAlpha = Math.max(0, 1 - age);
-  ctx.strokeStyle = f.color;
-  ctx.lineWidth = 6 * (1 - age) + 1;
-  ctx.beginPath();
-  ctx.arc(f.x - cam.x, f.y - cam.y, f.range * age + 10, 0, Math.PI * 2);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-}
+function build(fx, root, range, effects) {
+  const col = new THREE.Color(fx.color);
+  const col2 = new THREE.Color(fx.color2);
 
-function drawSlash(ctx, cam, f, age) {
-  const ang = Math.atan2(f.dy, f.dx);
-  const sweep = -1.4 + age * 2.8;
-  ctx.save();
-  ctx.translate(f.x - cam.x, f.y - cam.y);
-  ctx.rotate(ang);
-  ctx.globalAlpha = Math.max(0, 1 - age * 0.8);
-  ctx.strokeStyle = f.color;
-  ctx.lineWidth = 10 * (1 - age * 0.5) + 2;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.arc(0, 0, f.size, sweep - 0.5, sweep + 0.2);
-  ctx.stroke();
-  ctx.strokeStyle = f.color2;
-  ctx.lineWidth = 2;
-  ctx.stroke();
-  ctx.restore();
-  ctx.globalAlpha = 1;
-}
-
-function drawBeam(ctx, cam, f, age) {
-  const x0 = f.x - cam.x;
-  const y0 = f.y - cam.y;
-  const len = f.range * Math.min(1, age * 1.6);
-  ctx.globalAlpha = Math.max(0, 1 - age);
-  ctx.strokeStyle = f.color;
-  ctx.lineWidth = f.size;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(x0, y0);
-  ctx.lineTo(x0 + f.dx * len, y0 + f.dy * len);
-  ctx.stroke();
-  ctx.strokeStyle = f.color2;
-  ctx.lineWidth = Math.max(2, f.size / 3);
-  ctx.stroke();
-  ctx.globalAlpha = 1;
-}
-
-function drawOrb(ctx, cam, f) {
-  const x = f.px - cam.x;
-  const y = f.py - cam.y;
-  const g = ctx.createRadialGradient(x, y, 1, x, y, f.size * 2);
-  g.addColorStop(0, f.color2);
-  g.addColorStop(0.4, f.color);
-  g.addColorStop(1, 'rgba(0,0,0,0)');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.arc(x, y, f.size * 2, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-// Draws the effect at (x, y) in a standalone canvas, used by the Skill Lab preview.
-// Loops automatically so the designer can see it repeatedly.
-function previewEffect(canvas, fx, dir = { dx: 1, dy: 0 }) {
-  const ctx = canvas.getContext('2d');
-  const fxSys = new Effects();
-  let last = performance.now();
-  let nextAt = 0;
-  let running = true;
-  const cam = { x: -canvas.width / 2, y: -canvas.height / 2 };
-  const cx = 0;
-  const cy = 0;
-
-  function frame(now) {
-    if (!running) return;
-    const dt = Math.min(50, now - last);
-    last = now;
-    if (now >= nextAt) {
-      fxSys.spawn(fx, cx, cy, { dx: dir.dx, dy: dir.dy, range: Math.min(canvas.width, canvas.height) * 0.4 });
-      nextAt = now + fx.duration + 600;
+  switch (fx.type) {
+    case 'slash': {
+      const sweep = new THREE.Group();
+      sweep.position.y = 1.1;
+      root.add(sweep);
+      const outer = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.1, 8, 32, 1.9), glow(col));
+      const inner = new THREE.Mesh(new THREE.TorusGeometry(1.2, 0.04, 6, 32, 1.9), glow(col2));
+      sweep.add(outer, inner);
+      return {
+        root,
+        tick(dt, k) {
+          sweep.rotation.z = -1.2 + 2.4 * k;
+          sweep.scale.setScalar(0.7 + 0.5 * k);
+          outer.material.opacity = 1 - k;
+          inner.material.opacity = 1 - k;
+        },
+      };
     }
-    fxSys.update(dt);
-    ctx.fillStyle = '#140e28';
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-    // target dummy in the middle
-    ctx.fillStyle = '#8a6d3b';
-    ctx.fillRect(-6 - cam.x, -28 - cam.y, 12, 40);
-    fxSys.draw(ctx, cam);
-    requestAnimationFrame(frame);
+
+    case 'nova': {
+      const ring = new THREE.Mesh(new THREE.RingGeometry(0.85, 1, 48), glow(col));
+      ring.rotation.x = -Math.PI / 2;
+      ring.position.y = 0.08;
+      root.add(ring);
+      const p = particles(root, fx, col, col2, false);
+      return {
+        root,
+        tick(dt, k) {
+          ring.scale.setScalar(0.4 + k * Math.max(2, range) * 1.1);
+          ring.material.opacity = 1 - k;
+          p.tick(dt, k);
+        },
+      };
+    }
+
+    case 'beam': {
+      const holder = new THREE.Group();
+      holder.position.y = 1.0;
+      root.add(holder);
+      const outer = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 1, 10), glow(col, 0.9));
+      const inner = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 1, 8), glow(col2));
+      outer.rotation.x = Math.PI / 2;
+      inner.rotation.x = Math.PI / 2;
+      holder.add(outer, inner);
+      return {
+        root,
+        tick(dt, k) {
+          const len = Math.max(0.1, range * Math.min(1, k * 1.8));
+          for (const m of [outer, inner]) {
+            m.scale.y = len;
+            m.position.z = len / 2;
+          }
+          outer.material.opacity = 0.9 * (1 - k * 0.8);
+          inner.material.opacity = 1 - k * 0.8;
+        },
+      };
+    }
+
+    case 'projectile': {
+      const speed = Math.max(2.5, fx.speed / 80);
+      const flight = Math.min(2.2, Math.max(0.2, range / speed));
+      const orb = new THREE.Group();
+      orb.position.y = 1.0;
+      root.add(orb);
+      const core = new THREE.Mesh(sphere(0.22), glow(col2));
+      const halo = new THREE.Mesh(sphere(0.45), glow(col, 0.45));
+      orb.add(core, halo);
+      return {
+        root,
+        life: flight,
+        tick(dt, k) {
+          orb.position.z = range * k;
+        },
+        done() {
+          // impact point: range along the projectile's own facing, at chest height
+          const yaw = root.rotation.y;
+          const impact = new THREE.Vector3(
+            root.position.x + Math.sin(yaw) * range,
+            1.0,
+            root.position.z + Math.cos(yaw) * range,
+          );
+          effects.spawn(
+            { ...fx, type: 'burst', count: Math.round(fx.count * 0.6), speed: 160, duration: 450, shake: 0 },
+            impact,
+          );
+        },
+      };
+    }
+
+    case 'heal': {
+      const p = particles(root, fx, col, col2, true);
+      return { root, tick: (dt, k) => p.tick(dt, k) };
+    }
+
+    case 'burst':
+    default: {
+      const p = particles(root, fx, col, col2, false);
+      return { root, tick: (dt, k) => p.tick(dt, k) };
+    }
   }
-  requestAnimationFrame(frame);
-  return () => { running = false; };
+}
+
+function particles(root, fx, col, col2, upward) {
+  const n = Math.max(1, fx.count);
+  const pos = new Float32Array(n * 3);
+  const vel = new Float32Array(n * 3);
+  const cols = new Float32Array(n * 3);
+  const sp0 = Math.max(0.3, fx.speed / 90);
+  for (let i = 0; i < n; i++) {
+    const c = i % 2 ? col : col2;
+    cols.set([c.r, c.g, c.b], i * 3);
+    if (upward) {
+      pos.set([(Math.random() - 0.5) * 1.2, 0.2 + Math.random() * 0.6, (Math.random() - 0.5) * 1.2], i * 3);
+      vel.set([(Math.random() - 0.5) * 0.6, 1.2 + Math.random() * 1.4, (Math.random() - 0.5) * 0.6], i * 3);
+    } else {
+      const a = Math.random() * Math.PI * 2;
+      const sp = sp0 * (0.4 + Math.random() * 0.9);
+      vel.set([Math.cos(a) * sp, (0.6 + Math.random()) * sp * 0.7, Math.sin(a) * sp], i * 3);
+    }
+  }
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute('color', new THREE.BufferAttribute(cols, 3));
+  const mat = new THREE.PointsMaterial({
+    size: Math.max(0.06, fx.size * 0.025),
+    vertexColors: true,
+    transparent: true,
+    depthWrite: false,
+    blending: ADD,
+  });
+  root.add(new THREE.Points(geo, mat));
+  const gravity = upward ? -0.5 : 4;
+  return {
+    tick(dt, k) {
+      for (let i = 0; i < n; i++) {
+        vel[i * 3 + 1] -= gravity * dt;
+        pos[i * 3] += vel[i * 3] * dt;
+        pos[i * 3 + 1] += vel[i * 3 + 1] * dt;
+        pos[i * 3 + 2] += vel[i * 3 + 2] * dt;
+      }
+      geo.attributes.position.needsUpdate = true;
+      mat.opacity = 1 - k;
+    },
+  };
+}
+
+function sphere(r) {
+  return new THREE.SphereGeometry(r, 16, 12);
 }
