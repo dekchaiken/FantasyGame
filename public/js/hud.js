@@ -201,6 +201,25 @@ export const Hud = {
     void p;
   },
 
+  // Quest list in the left panel, in three groups: in progress, not taken yet, and done.
+  renderQuestList(g, trackedId) {
+    const p = g.p;
+    const groups = { active: [], open: [], done: [] };
+    for (const id of Object.keys(QUESTS)) {
+      const q = p.quests[id];
+      if (q?.status === 'done') groups.done.push(id);
+      else if (q) groups.active.push(id);
+      else groups.open.push(id);
+    }
+    const row = (id, cls, note) => `<div class="qt-row ${cls}${id === trackedId ? ' tracked' : ''}">
+        <span class="qt-mark"></span><span class="qt-name">${esc(QUESTS[id].title)}</span><small>${note}</small></div>`;
+    const section = (title, cls, ids, fn) => ids.length ? `<div class="qt-group ${cls}"><div class="qt-gtitle">${title} · ${ids.length}</div>${ids.map(fn).join('')}</div>` : '';
+    $('q-list').innerHTML =
+      section('กำลังทำ', 'in-progress', groups.active, (id) => row(id, 'active', P.currentStep(p, id) ? `ขั้นที่ ${p.quests[id].step + 1}` : '')) +
+      section('ยังไม่ได้รับ', 'not-taken', groups.open, (id) => row(id, 'open', p.level >= QUESTS[id].minLevel ? `รับที่ ${NPCS[QUESTS[id].giver].name}` : `ต้องเลเวล ${QUESTS[id].minLevel}`)) +
+      section('สำเร็จแล้ว', 'completed', groups.done, (id) => row(id, 'done', 'เสร็จสิ้น'));
+  },
+
   activeQuest(g) {
     return this.tracked && g.p.quests[this.tracked]?.status === 'active' ? this.tracked : this.trackedFallback(g);
   },
@@ -252,6 +271,7 @@ export const Hud = {
     // quest tracker
     const qid = this.activeQuest(g);
     this.guideRefresh(g);
+    this.renderQuestList(g, qid);
     if (qid) {
       const step = P.currentStep(p, qid);
       $('q-title').textContent = QUESTS[qid].title;

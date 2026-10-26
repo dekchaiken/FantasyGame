@@ -309,6 +309,13 @@ export const Game = {
     if (this.bound) return;
     this.bound = true;
 
+    // Keys are read by physical position (e.code), so WASD and number keys still work with a Thai or other input layout.
+    const keyName = (e) => {
+      if (/^Key[A-Z]$/.test(e.code)) return e.code[3].toLowerCase();
+      if (/^Digit[0-9]$/.test(e.code)) return e.code[5];
+      if (e.code === 'Space') return ' ';
+      return e.key.toLowerCase();
+    };
     window.addEventListener('keydown', (e) => {
       if (!$('game').classList.contains('active')) return;
       const chat = $('chat-input');
@@ -320,21 +327,21 @@ export const Game = {
       if (e.target.matches && e.target.matches('input, select, textarea')) return;
       if (e.key === 'Enter') { Hud.focusChat(); e.preventDefault(); return; }
       if (e.key === 'Escape') { Hud.close(); return; }
-      const k = e.key.toLowerCase();
+      const k = keyName(e);
       if (['arrowup', 'arrowdown', 'arrowleft', 'arrowright', ' '].includes(k)) e.preventDefault();
       if (e.repeat && !['a', 'd', 'w', 's'].includes(k) && !k.startsWith('arrow')) return;
       this.keys[k] = true;
-      if (/^[1-6]$/.test(e.key)) this.useSkill(Number(e.key));
+      if (/^[1-6]$/.test(k)) this.useSkill(Number(k));
       else if (k === ' ') this.basicNearest();
       else if (k === 'q') this.usePotion('potion_hp');
       else if (k === 'e') this.interactNearest();
       else if (k === 't') this.setAuto(!this.auto);
       else {
-        const menu = Hud.menuForKey(e.key);
+        const menu = Hud.menuForKey(k);
         if (menu) Hud.toggle(menu);
       }
     });
-    window.addEventListener('keyup', (e) => { this.keys[e.key.toLowerCase()] = false; });
+    window.addEventListener('keyup', (e) => { this.keys[keyName(e)] = false; });
     window.addEventListener('blur', () => { this.keys = {}; });
     document.addEventListener('visibilitychange', () => { if (document.hidden) this.save(); });
 

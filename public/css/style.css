@@ -920,3 +920,18 @@ button, input, select { font: inherit; color: inherit; }
 .dg-info small { color: var(--muted); font-size: 12px; line-height: 1.4; }
 .dg-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .dg-meta span { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #eef3ff; color: var(--ink); }
+
+/* ---------- quest list groups in the left panel ---------- */
+.qt-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; max-height: 240px; overflow-y: auto; border-top: 1px solid var(--line); padding-top: 8px; }
+.qt-gtitle { font-size: 11px; font-weight: 700; letter-spacing: 0.3px; color: var(--muted); margin-bottom: 4px; }
+.qt-group.in-progress .qt-gtitle { color: var(--cyan); }
+.qt-group.completed .qt-gtitle { color: var(--green); }
+.qt-row { display: flex; align-items: center; gap: 6px; padding: 5px 6px; border-radius: 10px; font-size: 12px; }
+.qt-row small { margin-left: auto; color: var(--muted); font-size: 11px; white-space: nowrap; }
+.qt-mark { width: 10px; height: 10px; border-radius: 50%; flex: none; }
+.qt-row.active .qt-mark { background: var(--cyan); box-shadow: 0 0 0 3px rgba(var(--rgb-sky), 0.2); }
+.qt-row.open .qt-mark { border: 2px dashed var(--muted); }
+.qt-row.done .qt-mark { background: var(--green); }
+.qt-row.done .qt-name { text-decoration: line-through; color: var(--muted); }
+.qt-row.open { color: var(--muted); }
+.qt-row.tracked { background: rgba(var(--rgb-sky), 0.12); }
