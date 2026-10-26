@@ -24,6 +24,85 @@ function ell(parent, r, sx, sy, sz, mat, x, y, z) {
   return m;
 }
 
+// Action poses. Each one runs for `dur` seconds on top of the idle/walk cycle.
+// apply() receives { arms, legs, body, head, k (0..1 progress), bump (0..1..0), dt }.
+export const POSES = {
+  swing: { dur: 0.36, apply: ({ arms, body, bump }) => {
+    arms[1].rotation.x = -2.6 * bump;
+    arms[1].rotation.z = -0.3 * bump;
+    body.rotation.x = 0.2 * bump;
+    body.position.z = 0.25 * bump;
+  } },
+  // Overhead slash: the weapon arm comes down in a wide arc.
+  slash: { dur: 0.5, apply: ({ arms, body, k }) => {
+    const a = k < 0.4 ? -2.9 * (k / 0.4) : -2.9 + 3.6 * ((k - 0.4) / 0.6);
+    arms[1].rotation.x = a;
+    arms[1].rotation.z = -0.5 * Math.sin(k * Math.PI);
+    body.rotation.x = 0.25 * Math.sin(k * Math.PI);
+  } },
+  // Lunge forward with the weapon held out.
+  thrust: { dur: 0.42, apply: ({ arms, body, bump }) => {
+    arms[1].rotation.x = -1.5 * bump;
+    body.rotation.x = 0.35 * bump;
+    body.position.z = 0.45 * bump;
+  } },
+  // Spin: the body turns a full circle while the arms open.
+  spin: { dur: 0.65, apply: ({ arms, body, k, bump }) => {
+    body.rotation.y = k * Math.PI * 2;
+    arms[0].rotation.z = 1.1 * bump;
+    arms[1].rotation.z = -1.1 * bump;
+  } },
+  // Guard: the off-hand comes up in front of the chest.
+  guard: { dur: 0.8, apply: ({ arms, body, bump }) => {
+    arms[0].rotation.x = -1.4 * bump;
+    arms[0].rotation.z = 0.5 * bump;
+    arms[1].rotation.x = -1.0 * bump;
+    body.rotation.x = -0.08 * bump;
+  } },
+  // Nova: both arms sweep out and up, the body rises slightly.
+  nova: { dur: 0.7, apply: ({ arms, body, bump }) => {
+    arms[0].rotation.x = -2.8 * bump;
+    arms[1].rotation.x = -2.8 * bump;
+    arms[0].rotation.z = 1.4 * bump;
+    arms[1].rotation.z = -1.4 * bump;
+    body.position.y += 0.12 * bump;
+  } },
+  // Heal: both hands drawn in to the chest and held there.
+  heal: { dur: 0.9, apply: ({ arms, head, bump }) => {
+    arms[0].rotation.x = -1.8 * bump;
+    arms[1].rotation.x = -1.8 * bump;
+    arms[0].rotation.z = 0.6 * bump;
+    arms[1].rotation.z = -0.6 * bump;
+    head.rotation.x = -0.12 * bump;
+  } },
+  // Cast: both arms raised high, the head tilts back.
+  cast: { dur: 0.7, apply: ({ arms, body, head, bump }) => {
+    arms[0].rotation.x = -2.5 * bump;
+    arms[1].rotation.x = -2.5 * bump;
+    body.position.y += 0.1 * bump;
+    head.rotation.x = -0.15 * bump;
+  } },
+  // Shout: arms spread wide and the head goes back.
+  shout: { dur: 0.6, apply: ({ arms, head, bump }) => {
+    arms[0].rotation.z = 1.7 * bump;
+    arms[1].rotation.z = -1.7 * bump;
+    head.rotation.x = -0.25 * bump;
+  } },
+};
+
+// Which pose a skill plays, from its effect type. Keeps the animation in step with the visual.
+export function poseFor(skill) {
+  const type = skill.fx?.type;
+  if (skill.heal) return 'heal';
+  if (skill.shield) return 'guard';
+  if (type === 'slash' || type === 'blades') return 'slash';
+  if (type === 'beam' || type === 'projectile' || type === 'dash') return 'thrust';
+  if (type === 'nova' || type === 'wave' && skill.aoe) return 'nova';
+  if (type === 'shout' || skill.icon === 'shout') return 'shout';
+  if (skill.icon === 'whirl') return 'spin';
+  return 'cast';
+}
+
 export function buildCharacter(input) {
   const cfg = { gender: input.gender || 'male', classId: input.classId || 'swordsman', appearance: fullAppearance(input.appearance) };
   const a = cfg.appearance;
@@ -171,26 +250,12 @@ export function buildCharacter(input) {
         aura.material.opacity = 0.35 + 0.15 * Math.sin(t * 4);
         if (auraRainbow) auraMat.color.setHSL((t * 0.25) % 1, 0.9, 0.6);
       }
+      if (moving) body.rotation.x = 0.07;
       if (actKind) {
         actT += dt;
-        const dur = actKind === 'swing' ? 0.36 : actKind === 'cast' ? 0.7 : 0.9;
-        const k = Math.min(1, actT / dur);
-        const bump = Math.sin(k * Math.PI);
-        if (actKind === 'swing') {
-          arms[1].rotation.x = -2.6 * bump;
-          arms[1].rotation.z = -0.3 * bump;
-          body.rotation.x = 0.2 * bump;
-          body.position.z = 0.25 * bump;
-        } else if (actKind === 'cast') {
-          arms[0].rotation.x = -2.5 * bump;
-          arms[1].rotation.x = -2.5 * bump;
-          body.position.y += 0.1 * bump;
-        } else {
-          arms[0].rotation.x = -1.6 * bump;
-          arms[1].rotation.x = -1.6 * bump;
-          arms[0].rotation.z = 1.2 * bump;
-          arms[1].rotation.z = -1.2 * bump;
-        }
+        const pose = POSES[actKind] || POSES.cast;
+        const k = Math.min(1, actT / pose.dur);
+        pose.apply({ arms, legs, body, head, k, bump: Math.sin(k * Math.PI), dt });
         if (k >= 1) actKind = null;
       }
     },

@@ -2,7 +2,7 @@ import * as THREE from 'three';
 import { buildTown } from './town.js';
 import { buildNav, findPath, blocked } from './nav.js';
 import { buildField, makePortal } from './field.js';
-import { buildCharacter } from './character.js';
+import { buildCharacter, poseFor } from './character.js';
 import { Effects } from './effects.js';
 import { Monster } from './monster.js';
 import { Hud } from './hud.js';
@@ -761,7 +761,7 @@ export const Game = {
       }
       h.mp -= s.mp;
       this.cooldowns[s.id] = now + cdMs;
-      h.char.act(s.heal ? 'heal' : 'cast');
+      h.char.act(poseFor(s));
       this.fx.spawn(s.fx, new THREE.Vector3(p.x, 0.2, p.z), dir, 0);
       this.aura(s.heal ? '#7dff9b' : '#8fd8ff', 2.4);
       return;
@@ -771,7 +771,7 @@ export const Game = {
     if (!targets.length) { Hud.toast('ไม่มีเป้าหมายในระยะ', 'warn'); return; }
     h.mp -= s.mp;
     this.cooldowns[s.id] = now + cdMs;
-    h.char.act('cast');
+    h.char.act(poseFor(s));
     this.aura(CLASSES[this.character.classId].color, 2.4);
     this.fx.spawn(s.fx, new THREE.Vector3(p.x, 1.0, p.z), dir, rangeU);
     if (s.fx.shake) {
