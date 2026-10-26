@@ -49,6 +49,10 @@ const P = {
   sparkle: '<path d="M12 3v4M12 17v4M3 12h4M17 12h4"/>',
   skin: '<path d="M12 3s6 6.5 6 11a6 6 0 0 1-12 0c0-4.5 6-11 6-11z"/>',
   logo: '<path d="M12 2l3 7 7 1-5.5 5 1.7 7.5L12 18.2 5.8 22.5 7.5 15 2 10l7-1z"/>',
+  axe: '<path d="M4 20L14 10"/><path d="M14 10c-3-4 2-9 6-6 3 3 1 7-2 8l-4 1"/>',
+  sickle: '<path d="M5 19c2-8 7-13 14-13"/><path d="M19 6v5"/><path d="M5 19l5-3"/>',
+  shout: '<path d="M4 10v4h4l6 4V6L8 10z"/><path d="M18 9c1.5 1.5 1.5 4.5 0 6"/>',
+  wave: '<path d="M3 12c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/><path d="M3 17c2-3 4-3 6 0s4 3 6 0 4-3 6 0"/>',
   minus: '<path d="M5 12h14"/>',
 };
 

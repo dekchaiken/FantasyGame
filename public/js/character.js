@@ -95,7 +95,8 @@ export function buildCharacter(input) {
     mesh(pivot, sphere(0.09), skin, 0, -0.44, 0);
     return pivot;
   });
-  arms[1].add(buildWeapon(cls.weapon, cls.color, accent));
+  let weapon = buildWeapon(cls.weapon, cls.color, accent);
+  arms[1].add(weapon);
 
   // head (pivot at neck)
   const head = new THREE.Group();
@@ -114,6 +115,13 @@ export function buildCharacter(input) {
   let actT = 0;
   return {
     group: root,
+    // swaps the weapon model (gear line) in the right hand
+    setWeapon(shape, color) {
+      arms[1].remove(weapon);
+      weapon.traverse((o) => o.geometry?.dispose());
+      weapon = buildWeapon(shape, color, std(color));
+      arms[1].add(weapon);
+    },
     // Plays a short action pose on top of the idle/walk cycle: 'swing' (basic attack), 'cast' (skill), 'heal'.
     act(kind) {
       actKind = kind;
@@ -123,6 +131,7 @@ export function buildCharacter(input) {
       const sw = moving ? Math.sin(t * 9) : 0;
       body.position.y = moving ? Math.abs(Math.sin(t * 9)) * 0.05 : Math.sin(t * 2) * 0.012;
       body.rotation.x = 0;
+      body.position.z = 0;
       arms[0].rotation.z = 0;
       arms[1].rotation.z = 0;
       legs[0].rotation.x = sw * 0.7;
@@ -141,6 +150,7 @@ export function buildCharacter(input) {
           arms[1].rotation.x = -2.6 * bump;
           arms[1].rotation.z = -0.3 * bump;
           body.rotation.x = 0.2 * bump;
+          body.position.z = 0.25 * bump;
         } else if (actKind === 'cast') {
           arms[0].rotation.x = -2.5 * bump;
           arms[1].rotation.x = -2.5 * bump;
@@ -301,6 +311,19 @@ function buildWeapon(kind, colorHex, accent) {
   } else if (kind === 'staff') {
     mesh(g, new THREE.CylinderGeometry(0.025, 0.025, 1.2, 10), wood, 0, 0.5, 0);
     mesh(g, sphere(0.11, 20, 16), glow, 0, 1.12, 0);
+  } else if (kind === 'axe') {
+    mesh(g, new THREE.CylinderGeometry(0.025, 0.025, 0.9, 8), wood, 0, 0.3, 0);
+    mesh(g, rbox(0.34, 0.3, 0.05, 0.03), steel, 0.12, 0.62, 0);
+  } else if (kind === 'sickle') {
+    mesh(g, new THREE.CylinderGeometry(0.02, 0.02, 0.5, 8), wood, 0, 0.1, 0);
+    const hook = mesh(g, new THREE.TorusGeometry(0.22, 0.03, 6, 16, Math.PI * 0.9), steel, 0.14, 0.52, 0);
+    hook.rotation.z = Math.PI * 0.45;
+  } else if (kind === 'crystal') {
+    mesh(g, new THREE.CylinderGeometry(0.025, 0.025, 1.1, 8), wood, 0, 0.45, 0);
+    mesh(g, new THREE.OctahedronGeometry(0.16, 0), glow, 0, 1.12, 0);
+  } else if (kind === 'lantern') {
+    mesh(g, new THREE.CylinderGeometry(0.02, 0.02, 0.5, 8), wood, 0, 0.12, 0);
+    mesh(g, rbox(0.18, 0.22, 0.18, 0.04), glow, 0, 0.42, 0);
   } else if (kind === 'book') {
     mesh(g, rbox(0.3, 0.24, 0.07, 0.02), glow, 0, 0.12, 0);
     mesh(g, rbox(0.27, 0.2, 0.08, 0.01), white(), 0, 0.12, 0.005);

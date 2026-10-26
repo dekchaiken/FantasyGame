@@ -1,4 +1,5 @@
-// Shared config: classes, appearance options, skills. Appearance is stored as indexes so the server can validate it.
+import { skillsOfClass } from './skills.js';
+// Shared config: classes, appearance options, HUD menus. Appearance is stored as indexes so the server can validate it.
 export const CLASSES = {
   swordsman: {
     name: 'นักดาบ', color: '#ff5d73', weapon: 'sword', icon: 'sword',
@@ -60,33 +61,8 @@ export function fullAppearance(a = {}) {
   };
 }
 
-// mult: damage as a multiple of attack. range in px (40px = 1 world unit). heal: fraction of max HP.
-export const DEFAULT_SKILLS = {
-  swordsman: [
-    { id: 'sw_slash', classId: 'swordsman', name: 'ฟันดาบ', icon: 'slash', key: 1, cooldown: 900, mp: 4, mult: 1.0, range: 110, reqLv: 1, aoe: false,
-      fx: { type: 'slash', color: '#ffd166', color2: '#ffffff', count: 1, size: 70, duration: 260, speed: 0, shake: 4 } },
-    { id: 'sw_whirl', classId: 'swordsman', name: 'พายุดาบ', icon: 'whirl', key: 2, cooldown: 5000, mp: 14, mult: 1.7, range: 120, reqLv: 5, aoe: true,
-      fx: { type: 'nova', color: '#ff7a59', color2: '#ffe0a3', count: 30, size: 6, duration: 520, speed: 260, shake: 8 } },
-  ],
-  assassin: [
-    { id: 'as_stab', classId: 'assassin', name: 'แทงลอบ', icon: 'dagger', key: 1, cooldown: 700, mp: 3, mult: 1.1, range: 100, reqLv: 1, aoe: false,
-      fx: { type: 'slash', color: '#9b8cff', color2: '#2c3e50', count: 1, size: 55, duration: 200, speed: 0, shake: 2 } },
-    { id: 'as_dash', classId: 'assassin', name: 'เงาพลิ้ว', icon: 'dash', key: 2, cooldown: 4000, mp: 10, mult: 1.8, range: 180, reqLv: 4, aoe: false,
-      fx: { type: 'beam', color: '#5ee7ff', color2: '#ffffff', count: 10, size: 10, duration: 350, speed: 0, shake: 3 } },
-  ],
-  mage: [
-    { id: 'mg_fire', classId: 'mage', name: 'ลูกไฟ', icon: 'fire', key: 1, cooldown: 800, mp: 6, mult: 1.6, range: 260, reqLv: 1, aoe: false,
-      fx: { type: 'projectile', color: '#ff7a1a', color2: '#ffe27a', count: 22, size: 9, duration: 450, speed: 520, shake: 2 } },
-    { id: 'mg_frost', classId: 'mage', name: 'แช่แข็ง', icon: 'snow', key: 2, cooldown: 7000, mp: 18, mult: 1.2, range: 160, reqLv: 8, aoe: true,
-      fx: { type: 'nova', color: '#7fd8ff', color2: '#ffffff', count: 40, size: 5, duration: 700, speed: 200, shake: 5 } },
-  ],
-  priest: [
-    { id: 'pr_light', classId: 'priest', name: 'แสงศักดิ์สิทธิ์', icon: 'holy', key: 1, cooldown: 900, mp: 6, mult: 1.3, range: 200, reqLv: 1, aoe: false,
-      fx: { type: 'burst', color: '#fff3a3', color2: '#ffffff', count: 28, size: 7, duration: 600, speed: 180, shake: 1 } },
-    { id: 'pr_heal', classId: 'priest', name: 'ฟื้นฟู', icon: 'plus', key: 2, cooldown: 4000, mp: 12, mult: 0, heal: 0.35, range: 0, reqLv: 3, aoe: false,
-      fx: { type: 'heal', color: '#7dff9b', color2: '#ffffff', count: 26, size: 6, duration: 900, speed: 90, shake: 0 } },
-  ],
-};
+// Built-in skills grouped by class, for the Skill Lab defaults.
+export const DEFAULT_SKILLS = Object.fromEntries(Object.keys(CLASSES).map((c) => [c, skillsOfClass(c)]));
 
 export const HUD_MENUS = [
   { id: 'inventory', icon: 'bag', label: 'กระเป๋า', key: 'I' },

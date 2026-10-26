@@ -7,8 +7,9 @@ import { Effects } from './effects.js';
 import { Monster } from './monster.js';
 import { Hud } from './hud.js';
 import { API } from './api.js';
-import { CLASSES, DEFAULT_SKILLS } from './config.js';
-import { MAPS, PORTALS, NPCS, MONSTERS, ITEMS, QUESTS } from './data.js';
+import { CLASSES } from './config.js';
+import { MAPS, PORTALS, NPCS, MONSTERS, QUESTS, MATERIALS, GEAR, RARITY } from './data.js';
+import { SKILL_BY_ID, rankMult, rankCooldown } from './skills.js';
 import * as P from './progress.js';
 import { Stage } from './stage.js';
 
@@ -19,10 +20,12 @@ const TOWN_LIMIT = 19;
 const NPC_RANGE = 2.6;
 const SAVE_EVERY = 6;
 const PORTAL_RANGE = 1.3;
-const FX_BASIC = {
-  slash: { type: 'slash', color: '#ffd166', color2: '#ffffff', count: 1, size: 70, duration: 240, speed: 0, shake: 1 },
-  projectile: { type: 'projectile', color: '#4fd1ff', color2: '#ffffff', count: 12, size: 6, duration: 400, speed: 600, shake: 0 },
-  burst: { type: 'burst', color: '#ffd166', color2: '#ffffff', count: 14, size: 5, duration: 380, speed: 140, shake: 0 },
+const SHIELD_TIME = 5;
+const FX_BASIC_DEFAULT = {
+  swordsman: { type: 'slash', color: '#ffd166', color2: '#ffffff', count: 1, size: 70, duration: 240, speed: 0, shake: 1 },
+  assassin: { type: 'slash', color: '#9b8cff', color2: '#ffffff', count: 1, size: 60, duration: 180, speed: 0, shake: 1 },
+  mage: { type: 'projectile', color: '#4fd1ff', color2: '#ffffff', count: 12, size: 6, duration: 400, speed: 600, shake: 0 },
+  priest: { type: 'burst', color: '#ffd166', color2: '#ffffff', count: 14, size: 5, duration: 380, speed: 140, shake: 0 },
 };
 
 const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -45,8 +48,12 @@ export const Game = {
   camera: new THREE.PerspectiveCamera(40, 1, 0.1, 300),
   world: null,
   fx: null,
+  nav: null,
+  path: null,
+  pathGoal: null,
+  pathT: 0,
   keys: {},
-  skills: [],
+  skillMap: {},
   cooldowns: {},
   cdBasic: 0,
   auto: false,
@@ -71,8 +78,8 @@ export const Game = {
   async start(character) {
     if (location.search.includes('debug')) window.__SR = this;
     this.character = character;
-    this.p = P.normalize(character.progress);
-    this.skills = await loadSkills(character.classId);
+    this.p = P.normalize(character.progress, character.classId);
+    this.skillMap = await loadSkillMap(character.classId);
     this.cooldowns = {};
     this.cdBasic = 0;
     this.auto = false;
@@ -82,14 +89,14 @@ export const Game = {
     this.dying = false;
 
     const ch = buildCharacter(character);
-    this.hero = { char: ch, group: ch.group, rot: 0, moving: false, hp: 1, mp: 1, flash: 0 };
+    this.hero = { char: ch, group: ch.group, rot: 0, moving: false, hp: 1, mp: 1, flash: 0, shield: 0, shieldT: 0 };
     this.refreshStats(true);
+    this.syncWeapon();
     this.bindInput();
     Hud.init(this);
 
     const start = this.p.map;
-    const at = this.p.pos;
-    const ok = await this.enterMap(MAPS[start] && P.mapUnlocked(this.p, start) ? start : 'town', at, { silent: true });
+    const ok = await this.enterMap(MAPS[start] && P.mapUnlocked(this.p, start) ? start : 'town', this.p.pos, { silent: true });
     if (!ok) await this.enterMap('town', null, { silent: true });
 
     this.dirty = false;
@@ -99,7 +106,7 @@ export const Game = {
     Hud.toast(`ยินดีต้อนรับสู่ ${MAPS[this.map].name}`);
   },
 
-  // ---------- stats ----------
+  // ---------- stats and gear ----------
   refreshStats(fill) {
     this.stats = P.statsFor(this.p);
     const h = this.hero;
@@ -110,6 +117,25 @@ export const Game = {
       h.hp = Math.min(h.hp, this.stats.maxHp);
       h.mp = Math.min(h.mp, this.stats.maxMp);
     }
+  },
+
+  // The hero's weapon model follows the equipped weapon.
+  syncWeapon() {
+    const base = this.equippedBase('weapon');
+    const cls = CLASSES[this.character.classId];
+    this.hero.char.setWeapon(base ? base.shape : cls.weapon, base ? base.color : cls.color);
+  },
+
+  equippedBase(slot) {
+    const g = P.findGear(this.p, this.p.equip[slot]);
+    return g ? GEAR[g.base] : null;
+  },
+
+  // Skills on the hotbar, with their ranks. Empty slots are null.
+  hotSkill(slot) {
+    const id = this.p.hotbar[slot - 1];
+    const s = id && this.skillMap[id];
+    return s ? { ...s, rank: this.p.skills[id] || 1 } : null;
   },
 
   // ---------- maps ----------
@@ -130,7 +156,7 @@ export const Game = {
     this.map = id;
     this.scene = new THREE.Scene();
     this.fx = new Effects(this.scene);
-    const world = { solids: [], portals: [], npcs: [], monsters: [], labels: [], update: null, spawn: { x: 0, z: 7 }, limit: TOWN_LIMIT };
+    const world = { solids: [], portals: [], npcs: [], monsters: [], labels: [], update: null, spawn: { x: 0, z: 7 }, limit: TOWN_LIMIT, round: true };
 
     if (id === 'town') {
       const t = buildTown(this.scene);
@@ -142,6 +168,7 @@ export const Game = {
       const f = buildField(this.scene, id, def, exits.map((e) => [e.x, e.z]));
       world.solids = f.solids;
       world.limit = f.half - 1.2;
+      world.round = false;
       world.spawn = { x: exits[0]?.arrive[0] ?? 0, z: exits[0]?.arrive[1] ?? 0 };
     }
 
@@ -166,12 +193,11 @@ export const Game = {
 
     for (const [mid, count] of def.spawns || []) {
       for (let i = 0; i < count; i++) {
-        const home = freeSpot(world, def, this.scene);
+        const home = freeSpot(world);
         world.monsters.push(new Monster(this.scene, mid, MONSTERS[mid], home));
       }
     }
 
-    // hero
     const g = this.hero.group;
     if (g.parent) g.parent.remove(g);
     this.scene.add(g);
@@ -183,7 +209,7 @@ export const Game = {
     this.camPos.set(sx, 9.5, sz + 12);
 
     this.world = world;
-    this.nav = buildNav(world.solids, world.limit, RADIUS, id === 'town');
+    this.nav = buildNav(world.solids, world.limit, RADIUS, world.round);
     this.path = null;
     this.pathGoal = null;
     this.buildLabels();
@@ -194,7 +220,7 @@ export const Game = {
     this.p.pos = [sx, sz];
     this.dirty = true;
 
-    const msgs = P.applyEvent(this.p, { type: 'visit', map: id });
+    const msgs = P.applyEvent(this.p, { type: 'visit', map: id }, this.character.classId);
     if (!opts.silent) {
       Hud.banner(def.name, def.levelText);
       Hud.fade(false);
@@ -220,7 +246,7 @@ export const Game = {
     for (const l of this.world.labels) {
       const el = document.createElement('div');
       el.className = 'label ' + l.kind;
-      el.innerHTML = `<span></span>`;
+      el.innerHTML = '<span></span>';
       el.querySelector('span').textContent = l.text;
       layer.appendChild(el);
       this.labelEls.push(el);
@@ -252,7 +278,7 @@ export const Game = {
       else if (k === ' ') this.basicNearest();
       else if (k === 'q') this.usePotion('potion_hp');
       else if (k === 'e') this.interactNearest();
-      else if (k === 't') Hud.setAuto(!this.auto);
+      else if (k === 't') this.setAuto(!this.auto);
       else {
         const menu = Hud.menuForKey(e.key);
         if (menu) Hud.toggle(menu);
@@ -363,7 +389,7 @@ export const Game = {
         }
       }
     }
-    if (this.auto) this.autoTick(dt, t);
+    if (this.auto) this.autoTick(dt);
 
     const len = Math.hypot(ix, iz);
     h.moving = len > 0;
@@ -392,21 +418,19 @@ export const Game = {
       m.faceCamera(this.camera);
     }
 
-    // regen and feedback timers
+    // regen and timers
     h.mp = Math.min(this.stats.maxMp, h.mp + 3 * dt);
     h.flash = Math.max(0, h.flash - dt);
+    h.shieldT = Math.max(0, h.shieldT - dt);
 
     // portals
-    if (!this.transitioning) {
-      for (const e of w.portals) {
-        if (Math.hypot(e.x - p.x, e.z - p.z) < PORTAL_RANGE) {
-          this.enterMap(e.to, e.arrive);
-          break;
-        }
+    for (const e of w.portals) {
+      if (Math.hypot(e.x - p.x, e.z - p.z) < PORTAL_RANGE) {
+        this.enterMap(e.to, e.arrive);
+        break;
       }
     }
 
-    // death
     if (h.hp <= 0 && !this.dying) this.die();
 
     // world animation
@@ -455,6 +479,24 @@ export const Game = {
     return CLASSES[this.character.classId].basic.range;
   },
 
+  // Next step along an A* route to (gx, gz), or null when there is no route.
+  routeDir(gx, gz, t) {
+    const p = this.hero.group.position;
+    const goalMoved = !this.pathGoal || Math.hypot(this.pathGoal.x - gx, this.pathGoal.z - gz) > 0.6;
+    if (!this.path || goalMoved || t - this.pathT > 0.8) {
+      this.path = findPath(this.nav, p.x, p.z, gx, gz);
+      this.pathT = t;
+      this.pathGoal = { x: gx, z: gz };
+      if (!this.path) return null;
+    }
+    while (this.path.length > 1 && Math.hypot(this.path[0].x - p.x, this.path[0].z - p.z) < 0.3) this.path.shift();
+    const wp = this.path[0];
+    const dx = wp.x - p.x;
+    const dz = wp.z - p.z;
+    const d = Math.hypot(dx, dz) || 1;
+    return { x: dx / d, z: dz / d };
+  },
+
   updateMarkers(t) {
     if (!this.world) return;
     for (const n of this.world.npcs) {
@@ -473,9 +515,11 @@ export const Game = {
       }
       n.status = avail ? 'มีภารกิจใหม่' : turnIn ? 'ส่งภารกิจ' : '';
     }
+    void t;
   },
 
   updateOverlays(dt) {
+    void dt;
     const w = window.innerWidth;
     const hgt = window.innerHeight;
     const project = (x, y, z) => {
@@ -519,51 +563,20 @@ export const Game = {
     this.floats.push({ el, x, y, z, born: performance.now() });
   },
 
-  // Next step along an A* route to (gx, gz), or null when there is no route.
-  routeDir(gx, gz, t) {
-    const p = this.hero.group.position;
-    const goalMoved = !this.pathGoal || Math.hypot(this.pathGoal.x - gx, this.pathGoal.z - gz) > 0.6;
-    if (!this.path || goalMoved || t - (this.pathT || 0) > 0.8) {
-      this.path = findPath(this.nav, p.x, p.z, gx, gz);
-      this.pathT = t;
-      this.pathGoal = { x: gx, z: gz };
-      if (!this.path) return null;
-    }
-    while (this.path.length > 1 && Math.hypot(this.path[0].x - p.x, this.path[0].z - p.z) < 0.3) this.path.shift();
-    const wp = this.path[0];
-    const dx = wp.x - p.x;
-    const dz = wp.z - p.z;
-    const d = Math.hypot(dx, dz) || 1;
-    return { x: dx / d, z: dz / d };
-  },
-
-  // A ring at the hero's feet so every attack and cast reads clearly from the camera.
-  aura(color, size) {
-    const p = this.hero.group.position;
-    this.fx.spawn(
-      { type: 'nova', color, color2: '#ffffff', count: 8, size: 4, duration: 320, speed: 90, shake: 0 },
-      new THREE.Vector3(p.x, 0.12, p.z),
-      { x: 0, z: 1 },
-      size,
-    );
-  },
-
-  // A burst of the target's colour where a hit lands.
-  impact(m) {
-    this.fx.spawn(
-      { type: 'burst', color: m.def.color, color2: '#ffffff', count: 16, size: 6, duration: 380, speed: 150, shake: 0 },
-      new THREE.Vector3(m.x, m.def.size, m.z),
-      { x: 0, z: 1 },
-      0,
-    );
-  },
-
   // ---------- combat ----------
+  // Damage = attack * multiplier - defence / 2, with a crit roll from gear.
   calcDamage(mult, def) {
     const base = this.stats.atk * mult - def * 0.5;
-    const crit = Math.random() < 0.15;
-    const dmg = Math.max(1, Math.round(base * (0.9 + Math.random() * 0.2) * (crit ? 1.6 : 1)));
+    const crit = Math.random() * 100 < this.stats.crit;
+    const critMul = 1 + this.stats.critDmg / 100;
+    const dmg = Math.max(1, Math.round(base * (0.9 + Math.random() * 0.2) * (crit ? critMul : 1)));
     return { dmg, crit };
+  },
+
+  weaponFx() {
+    const base = this.equippedBase('weapon');
+    if (base?.fx) return base.fx;
+    return FX_BASIC_DEFAULT[this.character.classId];
   },
 
   performBasic(m) {
@@ -572,21 +585,33 @@ export const Game = {
     this.hero.char.act('swing');
     this.aura(CLASSES[this.character.classId].color, 1.6);
     const p = this.hero.group.position;
-    const dir = this.facing();
-    this.fx.spawn(FX_BASIC[c.fx], new THREE.Vector3(p.x, 1.0, p.z), dir, c.range);
+    this.fx.spawn(this.weaponFx(), new THREE.Vector3(p.x, 1.0, p.z), this.facing(), c.range);
     this.hitMonster(m, 1.0);
   },
 
   hitMonster(m, mult) {
     const { dmg, crit } = this.calcDamage(mult, m.def.def);
     this.floatText(m.x, 1.8 * m.def.size, m.z, (crit ? 'คริติคอล ' : '') + dmg, crit ? '#ffd166' : '#ffffff', crit);
+    if (crit) {
+      this.shakeAmt = 0.08;
+      this.shakeUntil = performance.now() + 120;
+    }
+    // knock the monster back a little, away from the hero
+    const p = this.hero.group.position;
+    const d = Math.hypot(m.x - p.x, m.z - p.z) || 1;
+    if (!blocked(this.world.solids, m.x + ((m.x - p.x) / d) * 0.4, m.z + ((m.z - p.z) / d) * 0.4, 0.5)) {
+      m.x += ((m.x - p.x) / d) * 0.4;
+      m.z += ((m.z - p.z) / d) * 0.4;
+      m.group.position.set(m.x, 0, m.z);
+    }
     this.impact(m);
     if (m.hit(dmg)) this.onKill(m);
   },
 
   hurtHero(m) {
     const h = this.hero;
-    const dmg = Math.max(1, Math.round((m.def.atk - this.stats.def * 0.5) * (0.9 + Math.random() * 0.2)));
+    let dmg = Math.max(1, Math.round((m.def.atk - this.stats.def * 0.5) * (0.9 + Math.random() * 0.2)));
+    if (h.shieldT > 0) dmg = Math.max(1, Math.round(dmg * (1 - h.shield)));
     h.hp -= dmg;
     h.flash = 0.3;
     Hud.hurt();
@@ -600,32 +625,43 @@ export const Game = {
     let exp = d.exp;
     if (diff >= 6) exp = Math.round(exp * 0.3);
     else if (diff >= 3) exp = Math.round(exp * 0.6);
-    const gold = rand(d.gold[0], d.gold[1]);
-    const loot = [];
-    for (const [id, chance] of d.drops) {
-      if (Math.random() < chance) loot.push(id);
-    }
+    exp = Math.round(exp * this.stats.expMul);
+    const gold = Math.round(rand(d.gold[0], d.gold[1]) * this.stats.goldMul);
     this.p.gold += gold;
+
+    const items = [];
     const msgs = [];
-    for (const id of loot) {
-      P.addItem(this.p, id, 1);
-      msgs.push(...P.applyEvent(this.p, { type: 'collect', item: id, qty: 1 }));
+    for (const [id, chance] of d.drops) {
+      if (Math.random() < chance) {
+        P.addMat(this.p, id, 1);
+        items.push({ name: MATERIALS[id].name, icon: MATERIALS[id].icon, color: RARITY[MATERIALS[id].rarity].color });
+        msgs.push(...P.applyEvent(this.p, { type: 'collect', item: id, qty: 1 }, this.character.classId));
+      }
     }
-    msgs.unshift(...P.applyEvent(this.p, { type: 'kill', monster: m.id, map: this.map }));
+    if (Math.random() < d.gearChance) {
+      const gear = P.rollDrop(this.character.classId, d.level);
+      if (P.addGear(this.p, gear)) {
+        const base = GEAR[gear.base];
+        items.push({ name: `${base.name}${gear.opts.length ? ' · ' + gear.opts.length + ' ออฟชั่น' : ''}`, icon: base.icon, color: RARITY[base.rarity].color, rare: base.rarity !== 'common' });
+      } else {
+        Hud.toast('กระเป๋าเต็ม ของที่ตกหายไป', 'warn');
+      }
+    }
+    msgs.unshift(...P.applyEvent(this.p, { type: 'kill', monster: m.id, map: this.map }, this.character.classId));
     const levels = P.addExp(this.p, exp);
     this.floatText(m.x, 2.2 * m.def.size, m.z, `+${exp} EXP`, '#c79bff', true);
     if (levels) {
       this.refreshStats(true);
-      Hud.toast(`เลเวลอัป! ตอนนี้เลเวล ${this.p.level}`, 'gold');
+      Hud.toast(`เลเวลอัป! ตอนนี้เลเวล ${this.p.level} · ได้ ${2} แต้มสกิล`, 'gold');
     }
-    Hud.loot({ name: d.name, exp, gold, items: loot });
+    Hud.loot({ name: d.name, exp, gold, items });
     msgs.forEach((t) => Hud.toast(t, 'quest'));
     if (this.targetMon === m) this.targetMon = null;
     this.dirty = true;
     Hud.refresh(this);
   },
 
-  // Single or AoE skill. Returns the monsters that were hit.
+  // Monsters a skill hits: every one in range for AoE, otherwise the focused target or the nearest.
   monstersInRange(rangeU, aoe) {
     const p = this.hero.group.position;
     const dir = this.facing();
@@ -641,11 +677,11 @@ export const Game = {
     return focused ? [focused] : [];
   },
 
-  useSkill(key) {
-    const s = this.skills.find((x) => x.key === key);
-    if (!s || !this.hero) return;
-    if (this.p.level < s.reqLv) {
-      Hud.toast(`ปลดล็อกที่เลเวล ${s.reqLv}`, 'warn');
+  // Uses the skill on hotbar slot `slot` (1-6).
+  useSkill(slot) {
+    const s = this.hotSkill(slot);
+    if (!s || !this.hero) {
+      if (!s) Hud.toast('ยังไม่ได้ตั้งสกิลในช่องนี้ (เปิดหน้าสกิลเพื่อตั้งปุ่ม)', 'warn');
       return;
     }
     const now = performance.now();
@@ -655,31 +691,60 @@ export const Game = {
     const p = h.group.position;
     const dir = this.facing();
     const rangeU = Math.max(1, s.range / UNIT);
+    const cdMs = rankCooldown(s, s.rank, this.stats.cdr);
+    const mult = rankMult(s, s.rank) * (1 + this.stats.skillMg / 100);
 
-    if (s.heal) {
+    if (s.heal || s.shield) {
+      if (s.heal) {
+        const amount = Math.round(this.stats.maxHp * s.heal);
+        h.hp = Math.min(this.stats.maxHp, h.hp + amount);
+        this.floatText(p.x, 2.4, p.z, `+${amount}`, '#7dff9b', true);
+      }
+      if (s.shield) {
+        h.shield = s.shield;
+        h.shieldT = SHIELD_TIME;
+      }
       h.mp -= s.mp;
-      this.cooldowns[s.id] = now + s.cooldown;
-      const amount = Math.round(this.stats.maxHp * s.heal);
-      h.hp = Math.min(this.stats.maxHp, h.hp + amount);
+      this.cooldowns[s.id] = now + cdMs;
+      h.char.act(s.heal ? 'heal' : 'cast');
       this.fx.spawn(s.fx, new THREE.Vector3(p.x, 0.2, p.z), dir, 0);
-      h.char.act('heal');
-      this.aura('#7dff9b', 2.4);
-      this.floatText(p.x, 2.4, p.z, `+${amount}`, '#7dff9b', true);
+      this.aura(s.heal ? '#7dff9b' : '#8fd8ff', 2.4);
       return;
     }
 
     const targets = this.monstersInRange(rangeU, s.aoe);
     if (!targets.length) { Hud.toast('ไม่มีเป้าหมายในระยะ', 'warn'); return; }
     h.mp -= s.mp;
-    this.cooldowns[s.id] = now + s.cooldown;
-    this.fx.spawn(s.fx, new THREE.Vector3(p.x, 1.0, p.z), dir, rangeU);
-    this.hero.char.act('cast');
+    this.cooldowns[s.id] = now + cdMs;
+    h.char.act('cast');
     this.aura(CLASSES[this.character.classId].color, 2.4);
+    this.fx.spawn(s.fx, new THREE.Vector3(p.x, 1.0, p.z), dir, rangeU);
     if (s.fx.shake) {
       this.shakeAmt = s.fx.shake * 0.03;
       this.shakeUntil = now + 200;
     }
-    for (const m of targets) this.hitMonster(m, s.mult);
+    for (const m of targets) this.hitMonster(m, mult);
+  },
+
+  // A ring at the hero's feet so every attack and cast reads clearly from the camera.
+  aura(color, size) {
+    const p = this.hero.group.position;
+    this.fx.spawn(
+      { type: 'nova', color, color2: '#ffffff', count: 8, size: 4, duration: 320, speed: 90, shake: 0 },
+      new THREE.Vector3(p.x, 0.12, p.z),
+      { x: 0, z: 1 },
+      size,
+    );
+  },
+
+  // Sparks where a hit lands, in the monster's colour.
+  impact(m) {
+    this.fx.spawn(
+      { type: 'burst', color: m.def.color, color2: '#ffffff', count: 16, size: 6, duration: 380, speed: 150, shake: 0 },
+      new THREE.Vector3(m.x, m.def.size, m.z),
+      { x: 0, z: 1 },
+      0,
+    );
   },
 
   basicNearest() {
@@ -690,10 +755,10 @@ export const Game = {
     if (near && Math.hypot(near.x - p.x, near.z - p.z) <= range + 6) this.targetMon = near;
   },
 
-  autoTick(dt, t) {
+  autoTick(dt) {
     const p = this.hero.group.position;
+    const now = performance.now() / 1000;
     if (!this.targetMon || !this.targetMon.alive) {
-      const now = performance.now() / 1000;
       this.targetMon = this.world.monsters
         .filter((m) => m.alive && (m.unreachableUntil || 0) < now)
         .map((m) => ({ m, d: Math.hypot(m.x - p.x, m.z - p.z) }))
@@ -714,25 +779,28 @@ export const Game = {
     }
     this.exploreT = 0;
     const tm = this.targetMon;
-    const rangeU = (s) => Math.max(1, s.range / UNIT);
     const dist = Math.hypot(tm.x - p.x, tm.z - p.z);
-    for (const s of this.skills) {
-      if (this.p.level < s.reqLv || this.hero.mp < s.mp) continue;
-      if ((this.cooldowns[s.id] || 0) > performance.now()) continue;
+    const ready = (s) => (this.cooldowns[s.id] || 0) <= performance.now() && this.hero.mp >= s.mp;
+    for (let slot = 1; slot <= 6; slot++) {
+      const s = this.hotSkill(slot);
+      if (!s || !ready(s)) continue;
       if (s.heal) {
-        if (this.hero.hp < this.stats.maxHp * 0.6) { this.useSkill(s.key); break; }
+        if (this.hero.hp < this.stats.maxHp * 0.6) { this.useSkill(slot); break; }
         continue;
       }
-      if (dist <= rangeU(s) + 0.6) { this.useSkill(s.key); break; }
+      if (s.shield) {
+        if (this.hero.shieldT <= 0 && dist < 8) { this.useSkill(slot); break; }
+        continue;
+      }
+      if (dist <= Math.max(1, s.range / UNIT) + 0.6) { this.useSkill(slot); break; }
     }
-    if (this.hero.hp < this.stats.maxHp * 0.35 && (this.p.inv.potion_hp || 0) > 0) this.usePotion('potion_hp');
+    if (this.hero.hp < this.stats.maxHp * 0.35 && (this.p.mats.potion_hp || 0) > 0) this.usePotion('potion_hp');
   },
 
   die() {
     this.dying = true;
     Hud.toast('พ่ายแพ้... ฟื้นคืนชีพที่ดินแดนสวรรค์', 'warn');
-    this.auto = false;
-    Hud.setAuto(false);
+    this.setAuto(false);
     this.enterMap('town', null).then(() => {
       this.refreshStats(false);
       this.hero.hp = Math.round(this.stats.maxHp * 0.3);
@@ -748,10 +816,10 @@ export const Game = {
     Hud.toast(on ? 'เปิดออโต้: ล่ามอนสเตอร์อัตโนมัติ' : 'ปิดออโต้', on ? 'gold' : '');
   },
 
-  // ---------- items ----------
+  // ---------- items, gear and skills ----------
   usePotion(id) {
-    if (!P.removeItem(this.p, id, 1)) { Hud.toast('ไม่มียาในกระเป๋า', 'warn'); return; }
-    const heal = ITEMS[id].heal || 0;
+    if (!P.removeMat(this.p, id, 1)) { Hud.toast('ไม่มียาในกระเป๋า', 'warn'); return; }
+    const heal = MATERIALS[id].heal || 0;
     const before = this.hero.hp;
     this.hero.hp = Math.min(this.stats.maxHp, this.hero.hp + heal);
     const p = this.hero.group.position;
@@ -760,36 +828,65 @@ export const Game = {
     Hud.refresh(this);
   },
 
-  equip(id) {
-    const it = ITEMS[id];
-    if (!it || !['weapon', 'armor'].includes(it.type)) return;
-    if (!P.removeItem(this.p, id, 1)) return;
-    const old = this.p.equip[it.type];
-    if (old) P.addItem(this.p, old, 1);
-    this.p.equip[it.type] = id;
+  equip(uid) {
+    const err = P.equipGear(this.p, uid, this.character.classId);
+    if (err) { Hud.toast(err, 'warn'); return; }
+    const g = P.findGear(this.p, uid);
     this.refreshStats(false);
-    Hud.toast(`สวมใส่ ${it.name}`);
+    this.syncWeapon();
+    Hud.toast(`สวมใส่ ${GEAR[g.base].name} +${g.enh}`);
     this.dirty = true;
     Hud.refresh(this);
   },
 
   unequip(slot) {
-    const id = this.p.equip[slot];
-    if (!id) return;
-    P.addItem(this.p, id, 1);
-    this.p.equip[slot] = null;
+    P.unequip(this.p, slot);
     this.refreshStats(false);
+    if (slot === 'weapon') this.syncWeapon();
+    this.dirty = true;
+    Hud.refresh(this);
+  },
+
+  enhance(uid) {
+    const r = P.enhance(this.p, uid);
+    Hud.toast(r.msg, r.ok ? 'gold' : r.result === 'error' ? 'warn' : r.result === 'down' ? 'warn' : '');
+    if (r.result === 'success' || r.result === 'down') this.refreshStats(false);
+    this.dirty = true;
+    Hud.refresh(this);
+    return r;
+  },
+
+  sell(uid) {
+    const gold = P.sellGear(this.p, uid);
+    if (gold === null) { Hud.toast('ขายไม่ได้ (ถอดอุปกรณ์ก่อน)', 'warn'); return; }
+    Hud.toast(`ขายได้ ${gold} เหรียญ`, 'gold');
     this.dirty = true;
     Hud.refresh(this);
   },
 
   buy(itemId) {
-    const it = ITEMS[itemId];
+    const it = MATERIALS[itemId];
     if (!it?.price) return;
     if (this.p.gold < it.price) { Hud.toast('เหรียญไม่พอ', 'warn'); return; }
     this.p.gold -= it.price;
-    P.addItem(this.p, itemId, 1);
+    P.addMat(this.p, itemId, 1);
     Hud.toast(`ซื้อ ${it.name} แล้ว`);
+    this.dirty = true;
+    Hud.refresh(this);
+  },
+
+  learn(skillId) {
+    const err = P.learnSkill(this.p, skillId);
+    if (err) { Hud.toast(err, 'warn'); return; }
+    const s = this.skillMap[skillId];
+    Hud.toast(`เรียนรู้ ${s.name} (ระดับ ${this.p.skills[skillId]})`, 'gold');
+    this.dirty = true;
+    Hud.refresh(this);
+  },
+
+  setHotbar(slot, skillId) {
+    const err = P.setHotbar(this.p, slot - 1, skillId);
+    if (err) Hud.toast(err, 'warn');
     this.dirty = true;
     Hud.refresh(this);
   },
@@ -806,7 +903,7 @@ export const Game = {
     for (const qid of P.availableQuests(this.p, npcId)) {
       if (P.acceptQuest(this.p, qid)) msgs.push(`รับภารกิจ: ${QUESTS[qid].title}`);
     }
-    msgs.push(...P.applyEvent(this.p, { type: 'talk', npc: npcId }));
+    msgs.push(...P.applyEvent(this.p, { type: 'talk', npc: npcId }, this.character.classId));
     msgs.forEach((m) => Hud.toast(m, 'quest'));
     this.dirty = true;
     Hud.openNpc(npcId);
@@ -833,17 +930,20 @@ export const Game = {
 };
 
 // ---------- helpers ----------
-async function loadSkills(classId) {
-  const byId = new Map((DEFAULT_SKILLS[classId] || []).map((s) => [s.id, s]));
+// Built-in skills plus the custom ones saved from the Skill Lab for this class.
+async function loadSkillMap(classId) {
+  const map = { ...Object.fromEntries(Object.entries(SKILL_BY_ID).filter(([, s]) => s.classId === classId)) };
   try {
     const data = await API.get('/api/skills?classId=' + encodeURIComponent(classId));
-    for (const s of data.skills || []) byId.set(s.id, s);
-  } catch { /* offline: defaults only */ }
-  return [...byId.values()].sort((a, b) => a.key - b.key);
+    for (const s of data.skills || []) {
+      if (s.classId === classId && !SKILL_BY_ID[s.id]) map[s.id] = { ...s, tier: 1, line: 'custom', lineName: 'กำหนดเอง', reqLv: 1 };
+    }
+  } catch { /* offline: built-in skills only */ }
+  return map;
 }
 
 // Random point inside the map that is not on a solid, a portal or an NPC.
-function freeSpot(world, def, scene) {
+function freeSpot(world) {
   const limit = world.limit ?? TOWN_LIMIT;
   for (let i = 0; i < 60; i++) {
     const x = (Math.random() * 2 - 1) * limit * 0.9;

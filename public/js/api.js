@@ -63,7 +63,7 @@ function localHandle(method, url, body, token) {
       gender: body.gender === 'female' ? 'female' : 'male',
       classId: CLASSES[body.classId] ? body.classId : 'swordsman',
       appearance: body.appearance || {},
-      progress: normalize({}),
+      progress: normalize({}, CLASSES[body.classId] ? body.classId : 'swordsman'),
     };
     db.characters.push(ch);
     saveLocal(db);
@@ -82,7 +82,7 @@ function localHandle(method, url, body, token) {
     }
     if (method === 'PUT') {
       if (body.appearance) ch.appearance = body.appearance;
-      if (body.progress) ch.progress = normalize(body.progress);
+      if (body.progress) ch.progress = normalize(body.progress, ch.classId);
       saveLocal(db);
     }
     return { character: ch };

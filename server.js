@@ -106,40 +106,10 @@ const clampInt = (v, min, max, def) => {
   return Math.min(max, Math.max(min, n));
 };
 
-// Keep in sync with public/js/progress.js (normalize). Unknown ids are dropped, numbers are clamped.
-const PROGRESS_ITEMS = ['potion_hp', 'essence', 'herb', 'wolf_fang', 'crystal_ore', 'sword_iron', 'sword_flame', 'armor_leaf', 'armor_golem'];
-const PROGRESS_MAPS = ['town', 'forest', 'mine'];
-const PROGRESS_QUESTS = { main_1: 6, side_wolf: 3, side_herb: 3 };
-function sanitizeProgress(p = {}) {
-  const inv = {};
-  for (const [id, n] of Object.entries(p.inv || {})) {
-    if (PROGRESS_ITEMS.includes(id) && Number.isInteger(n) && n > 0) inv[id] = Math.min(999, n);
-  }
-  const quests = {};
-  for (const [id, q] of Object.entries(p.quests || {})) {
-    if (!(id in PROGRESS_QUESTS) || !q || typeof q !== 'object') continue;
-    quests[id] = {
-      status: q.status === 'done' ? 'done' : 'active',
-      step: clampInt(q.step, 0, PROGRESS_QUESTS[id], 0),
-      count: clampInt(q.count, 0, 9999, 0),
-    };
-  }
-  const pos = Array.isArray(p.pos) && p.pos.length === 2 && p.pos.every(Number.isFinite) ? p.pos : null;
-  return {
-    v: 2,
-    level: clampInt(p.level, 1, 30, 1),
-    exp: clampInt(p.exp, 0, 1e9, 0),
-    gold: clampInt(p.gold, 0, 1e9, 0),
-    inv,
-    equip: {
-      weapon: p.equip?.weapon === 'sword_iron' || p.equip?.weapon === 'sword_flame' ? p.equip.weapon : null,
-      armor: p.equip?.armor === 'armor_leaf' || p.equip?.armor === 'armor_golem' ? p.equip.armor : null,
-    },
-    quests,
-    map: PROGRESS_MAPS.includes(p.map) ? p.map : 'town',
-    pos,
-  };
-}
+// Progress rules live in public/js/progress.js and are shared with the client, so the server
+// validates saves with exactly the same code. Loaded once at startup (the file is an ES module).
+let progressLib = null;
+const progressReady = import(path.join(__dirname, 'public', 'js', 'progress.js')).then((m) => { progressLib = m; });
 
 // Keep in sync with public/js/config.js (OPTIONS and DEFAULT_APPEARANCE).
 function sanitizeAppearance(a = {}) {
@@ -299,7 +269,7 @@ async function handleApi(req, res, url) {
     if (m === 'PUT') {
       const body = await readBody(req);
       if (body.appearance) ch.appearance = sanitizeAppearance(body.appearance);
-      if (body.progress) ch.progress = sanitizeProgress(body.progress);
+      if (body.progress) ch.progress = progressLib ? progressLib.normalize(body.progress, ch.classId) : body.progress;
       saveDb();
       return send(res, 200, { character: ch });
     }
@@ -367,7 +337,7 @@ const server = http.createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, () => {
+progressReady.then(() => server.listen(PORT, () => {
   console.log(`Game platform running on http://localhost:${PORT}`);
   if (!GOOGLE_CLIENT_ID) console.log('GOOGLE_CLIENT_ID not set: Google login disabled, guest login only.');
-});
+}));

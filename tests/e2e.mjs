@@ -66,7 +66,7 @@ try {
     }
     assert.ok(st.q.step >= 2, 'quest step 2 (collect essence) should be reached');
     assert.ok(st.lv >= 2 || st.exp > 0, 'should gain exp');
-    assert.ok(await state(() => (__SR.p.inv.essence || 0) > 0), 'should have dropped essence');
+    assert.ok(await state(() => (__SR.p.mats.essence || 0) > 0), 'should have dropped essence');
   });
 
   await step('auto-battle never walks into a tree or wall', async () => {

@@ -1,13 +1,14 @@
 import { icon } from './icons.js';
-import { CLASSES } from './config.js';
-import { HUD_MENUS } from './config.js';
-import { ITEMS, MAPS, NPCS, QUESTS, RARITY } from './data.js';
+import { CLASSES, HUD_MENUS } from './config.js';
+import { MAPS, NPCS, QUESTS, MATERIALS, GEAR, RARITY } from './data.js';
+import { SKILL_TREE, TIER_LEVEL, MAX_RANK } from './skills.js';
 import * as P from './progress.js';
 import { drawThumb } from './thumb.js';
 
-// HUD and windows. The game state is the source of truth; this module only renders it.
+// HUD and windows. Game state is the source of truth; this module only renders it and forwards clicks.
 const $ = (id) => document.getElementById(id);
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const fmt = (n) => Number(n).toLocaleString('th-TH');
 
 export const Hud = {
   g: null,
@@ -17,7 +18,7 @@ export const Hud = {
   tracked: null,
   bound: false,
   slots: [],
-  toastTimer: 0,
+  portraitAt: 0,
 
   init(game) {
     this.g = game;
@@ -25,7 +26,6 @@ export const Hud = {
     $('hud-menu').innerHTML = HUD_MENUS.map((m) =>
       `<button class="menu-btn" data-act="menu" data-menu="${m.id}" aria-label="${m.label}" title="${m.label} (${m.key})">` +
       `${icon(m.icon)}<span>${m.label}</span><kbd>${m.key}</kbd></button>`).join('');
-
     const dock = $('dock-skills');
     dock.innerHTML = '';
     this.slots = [];
@@ -54,9 +54,13 @@ export const Hud = {
         case 'auto': g.setAuto(!g.auto); break;
         case 'potion': g.usePotion('potion_hp'); break;
         case 'skill': g.useSkill(Number(d.key)); break;
-        case 'equip': g.equip(d.id); break;
+        case 'equip': g.equip(d.uid); break;
         case 'unequip': g.unequip(d.slot); break;
-        case 'use': if (ITEMS[d.id]?.type === 'potion') g.usePotion(d.id); break;
+        case 'enhance': g.enhance(d.uid); break;
+        case 'sell': g.sell(d.uid); break;
+        case 'learn': g.learn(d.id); break;
+        case 'hot': g.setHotbar(Number(d.slot), d.id || null); break;
+        case 'use': g.usePotion(d.id); break;
         case 'buy': g.buy(d.id); break;
         case 'travel': this.close(); g.enterMap(d.map, null); break;
         case 'talk': this.close(); g.talkTo(d.npc); break;
@@ -85,6 +89,7 @@ export const Hud = {
     this.windowData = { tab: 'active', ...data };
     this.windowHtml = '';
     $('window').hidden = false;
+    $('window').classList.toggle('wide', kind === 'skills' || kind === 'inventory');
     this.refresh(this.g);
   },
 
@@ -100,87 +105,23 @@ export const Hud = {
 
   renderWindow(g) {
     const p = g.p;
-    const stats = g.stats;
     const kind = this.windowKind;
     const titles = {
-      inventory: 'กระเป๋า', equip: 'อุปกรณ์', skills: 'สกิล', quests: 'ภารกิจ', map: 'แผนที่', status: 'ตัวละคร', npc: NPCS[this.windowData.npcId]?.name || '', shop: 'ร้านค้า',
+      inventory: 'กระเป๋า', equip: 'อุปกรณ์และตีบวก', skills: 'สกิล', quests: 'ภารกิจ', map: 'แผนที่', status: 'ตัวละคร',
+      npc: NPCS[this.windowData.npcId]?.name || '',
     };
-    $('window-title').innerHTML = `${icon(HUD_MENUS.find((m) => m.id === kind)?.icon || 'chat')}<span>${esc(titles[kind] || '')}</span>`;
+    const menu = HUD_MENUS.find((m) => m.id === kind);
+    $('window-title').innerHTML = `${icon(menu?.icon || 'chat')}<span>${esc(titles[kind] || '')}</span>`;
     let html = '';
 
-    if (kind === 'inventory') {
-      const items = Object.entries(p.inv);
-      html += `<div class="row-meta"><span>${icon('coin')} ${p.gold.toLocaleString('th-TH')} เหรียญ</span><span>${items.length} ชนิด</span></div>`;
-      html += items.length ? `<div class="grid">${items.map(([id, n]) => itemTile(id, n, true)).join('')}</div>`
-        : '<div class="empty">กระเป๋าว่างเปล่า ออกไปล่ามอนสเตอร์เพื่อหาของกัน</div>';
-    } else if (kind === 'equip') {
-      html += '<div class="slots">';
-      for (const slot of ['weapon', 'armor']) {
-        const id = p.equip[slot];
-        const it = id ? ITEMS[id] : null;
-        html += `<div class="slot-card${it ? '' : ' empty'}" data-act="${it ? 'unequip' : ''}" data-slot="${slot}">
-          <div class="slot-ico" style="color:${it ? RARITY[it.rarity].color : 'var(--muted)'}">${icon(it ? it.icon : slot === 'weapon' ? 'sword' : 'armor')}</div>
-          <div><b>${slot === 'weapon' ? 'อาวุธ' : 'ชุดเกราะ'}</b><small>${it ? esc(it.name) : 'ว่าง'}</small></div></div>`;
-      }
-      html += '</div>';
-      html += `<div class="stat-list">${statRow('พลังโจมตี', stats.atk)}${statRow('ป้องกัน', stats.def)}${statRow('HP สูงสุด', stats.maxHp)}${statRow('MP สูงสุด', stats.maxMp)}</div>`;
-      html += '<div class="hint">แตะช่องที่สวมใส่อยู่เพื่อถอด หรือกดไอเท็มในกระเป๋าเพื่อสวมใส่</div>';
-    } else if (kind === 'skills') {
-      html += g.skills.map((s) => {
-        const locked = p.level < s.reqLv;
-        return `<div class="skill-row${locked ? ' locked' : ''}">
-          <div class="sk-badge">${icon(s.icon)}</div>
-          <div class="sk-info"><b>${esc(s.name)}</b><small>ปุ่ม ${s.key} · คูลดาวน์ ${(s.cooldown / 1000).toFixed(1)} วิ · MP ${s.mp}${s.heal ? ' · ฟื้นฟู ' + Math.round(s.heal * 100) + '% HP' : ' · ดาเมจ ' + Math.round(s.mult * 100) + '%'}${s.aoe ? ' · โจมตีกลุ่ม' : ''}</small></div>
-          <div class="sk-lv">${locked ? icon('lock') + ' Lv ' + s.reqLv : icon('check')}</div></div>`;
-      }).join('') || '<div class="empty">ยังไม่มีสกิลสำหรับอาชีพนี้</div>';
-    } else if (kind === 'quests') {
-      const tabs = [['active', 'กำลังทำ'], ['done', 'สำเร็จแล้ว'], ['open', 'ยังไม่รับ']];
-      html += `<div class="tabs">${tabs.map(([id, l]) => `<button class="tab${this.windowData.tab === id ? ' on' : ''}" data-act="tab" data-tab="${id}">${l}</button>`).join('')}</div>`;
-      const entries = Object.entries(QUESTS);
-      const list = entries.filter(([id]) => {
-        const q = p.quests[id];
-        if (this.windowData.tab === 'open') return !q && p.level >= QUESTS[id].minLevel;
-        if (this.windowData.tab === 'done') return q?.status === 'done';
-        return q?.status === 'active';
-      });
-      html += list.map(([id, quest]) => {
-        const q = p.quests[id];
-        const step = q && q.status === 'active' ? quest.steps[q.step] : null;
-        const prog = P.stepProgressText(p, id);
-        const tracked = this.tracked === id || (!this.tracked && this.trackedFallback(g) === id);
-        return `<div class="quest-card">
-          <div class="qc-head"><b>${esc(quest.title)}</b><small>${esc(NPCS[quest.giver].name)}</small></div>
-          ${step ? `<p>${esc(step.text)}</p>` : `<p>${q ? 'ภารกิจเสร็จสมบูรณ์' : 'คุยกับ ' + esc(NPCS[quest.giver].name) + ' เพื่อรับภารกิจ'}</p>`}
-          ${prog ? `<div class="qc-prog"><span style="width:${progressPct(p, id)}%"></span><em>${prog}</em></div>` : ''}
-          ${q?.status === 'active' ? `<button class="btn-ghost sm" data-act="track" data-quest="${id}">${tracked ? 'กำลังติดตาม' : 'ติดตามภารกิจ'}</button>` : ''}
-        </div>`;
-      }).join('') || '<div class="empty">ไม่มีรายการในหมวดนี้</div>';
-    } else if (kind === 'map') {
-      html += Object.entries(MAPS).map(([id, m]) => {
-        const ok = P.mapUnlocked(p, id);
-        return `<div class="map-card${ok ? '' : ' locked'}${g.map === id ? ' here' : ''}">
-          <div class="map-ico">${icon(id === 'town' ? 'shield' : id === 'forest' ? 'leaf' : 'ore')}</div>
-          <div class="map-info"><b>${esc(m.name)}</b><small>${m.levelText}${ok ? '' : ' · ต้องเลเวล ' + m.minLevel}</small></div>
-          ${g.map === id ? '<span class="tag">อยู่ที่นี่</span>' : ok ? `<button class="btn-primary sm" data-act="travel" data-map="${id}">${icon('arrow')} ไป</button>` : `<span class="tag lock">${icon('lock')}</span>`}
-        </div>`;
-      }).join('');
-    } else if (kind === 'status') {
-      html += `<div class="status-head"><canvas id="status-thumb" width="180" height="180"></canvas>
-        <div><b>${esc(g.character.name)}</b><small>${CLASSES[g.character.classId].name} · เลเวล ${p.level}</small>
-        <div class="xp"><span style="width:${(p.exp / P.expToNext(p.level)) * 100}%"></span></div><small>${p.exp} / ${P.expToNext(p.level)} EXP</small></div></div>`;
-      html += `<div class="stat-list">${statRow('พลังโจมตี', stats.atk)}${statRow('ป้องกัน', stats.def)}${statRow('HP สูงสุด', stats.maxHp)}${statRow('MP สูงสุด', stats.maxMp)}${statRow('เหรียญ', p.gold)}</div>`;
-    } else if (kind === 'npc') {
-      const npc = NPCS[this.windowData.npcId];
-      html += `<div class="npc-head"><small>${esc(npc.role)}</small><p class="greet">${esc(npc.greet)}</p></div>`;
-      const mine = Object.entries(p.quests).filter(([id, q]) => q.status === 'active' && QUESTS[id].giver === this.windowData.npcId || (q.status === 'active' && P.currentStep(p, id)?.npc === this.windowData.npcId));
-      html += mine.map(([id]) => `<div class="quest-card"><div class="qc-head"><b>${esc(QUESTS[id].title)}</b></div><p>${esc(P.currentStep(p, id)?.text || '')}</p></div>`).join('');
-      if (npc.shop) {
-        html += `<div class="sub-title">${icon('shop')} สินค้า</div><div class="grid">${npc.shop.map((id) => shopTile(id)).join('')}</div>`;
-      }
-      html += `<div class="row-meta"><span>${icon('coin')} ${p.gold.toLocaleString('th-TH')} เหรียญ</span><button class="btn-ghost sm" data-act="talk" data-npc="${this.windowData.npcId}">คุยต่อ</button></div>`;
-    }
+    if (kind === 'inventory') html = inventoryHtml(g);
+    else if (kind === 'equip') html = equipHtml(g);
+    else if (kind === 'skills') html = skillsHtml(g);
+    else if (kind === 'quests') html = questsHtml(g, this);
+    else if (kind === 'map') html = mapHtml(g);
+    else if (kind === 'status') html = statusHtml(g);
+    else if (kind === 'npc') html = npcHtml(g, this.windowData.npcId);
 
-    if (kind === 'status' && this.windowHtml !== html) this.windowHtml = html;
     if (html !== this.windowHtml) {
       this.windowHtml = html;
       $('window-body').innerHTML = html;
@@ -189,13 +130,14 @@ export const Hud = {
       const c = document.getElementById('status-thumb');
       if (c) drawThumb(c.getContext('2d'), g.character, 0, 0, 180, 180);
     }
+    void p;
   },
 
   trackedFallback(g) {
     return Object.keys(g.p.quests).find((id) => g.p.quests[id].status === 'active') || null;
   },
 
-  // ---------- per-tick refresh (state → DOM) ----------
+  // ---------- per-tick refresh (state -> DOM) ----------
   refresh(g) {
     if (!g || !g.hero) return;
     const p = g.p;
@@ -247,29 +189,30 @@ export const Hud = {
       $('hud-target').hidden = true;
     }
 
-    // dock
+    // dock: auto, potion and the six hotbar slots
     $('dock-auto').classList.toggle('on', !!g.auto);
     $('dock-auto-label').textContent = g.auto ? 'ออโต้ เปิด' : 'ออโต้ ปิด';
-    const potions = p.inv.potion_hp || 0;
+    const potions = p.mats.potion_hp || 0;
     $('dock-potion-count').textContent = potions;
     $('dock-potion').disabled = potions === 0;
     const now = performance.now();
-    g.skills.forEach((sk, i) => {
-      const el = this.slots[sk.key - 1];
-      if (!el) return;
+    this.slots.forEach((el, i) => {
+      const sk = g.hotSkill(i + 1);
+      el.classList.toggle('empty', !sk);
+      if (!sk) {
+        el.querySelector('.sk-ico').innerHTML = '';
+        el.querySelector('.sk-name').textContent = 'ว่าง';
+        el.querySelector('.sk-cd').textContent = '';
+        el.classList.remove('cooling');
+        el.title = 'เปิดหน้าสกิลเพื่อตั้งปุ่มนี้';
+        return;
+      }
       const left = (g.cooldowns[sk.id] || 0) - now;
-      const locked = p.level < sk.reqLv;
-      el.classList.toggle('locked', locked);
       el.classList.toggle('cooling', left > 0);
       el.querySelector('.sk-ico').innerHTML = icon(sk.icon);
-      el.querySelector('.sk-name').textContent = locked ? `Lv ${sk.reqLv}` : sk.name;
+      el.querySelector('.sk-name').textContent = sk.name;
       el.querySelector('.sk-cd').textContent = left > 0 ? (left / 1000).toFixed(1) : '';
-      el.title = sk.name;
-    });
-    this.slots.forEach((el, i) => {
-      if (g.skills.some((sk) => sk.key === i + 1)) return;
-      el.classList.add('empty');
-      el.querySelector('.sk-name').textContent = 'ว่าง';
+      el.title = `${sk.name} (ระดับ ${sk.rank})`;
     });
 
     this.drawMinimap(g);
@@ -327,11 +270,12 @@ export const Hud = {
     setTimeout(() => el.remove(), 3000);
   },
 
+  // items: [{ name, icon, color, rare }]
   loot({ name, exp, gold, items }) {
     const wrap = $('loot');
     const el = document.createElement('div');
     el.className = 'loot-card';
-    const drops = items.map((id) => `<li style="color:${RARITY[ITEMS[id].rarity].color}">${icon(ITEMS[id].icon)}<span>${esc(ITEMS[id].name)}</span></li>`).join('');
+    const drops = items.map((it) => `<li class="${it.rare ? 'rare' : ''}" style="color:${it.color}">${icon(it.icon)}<span>${esc(it.name)}</span></li>`).join('');
     el.innerHTML = `<div class="lc-head"><b>${esc(name)}</b><small>+${exp} EXP · +${gold} ${icon('coin')}</small></div>${drops ? `<ul>${drops}</ul>` : '<div class="lc-none">ไม่มีของตก</div>'}`;
     wrap.appendChild(el);
     while (wrap.children.length > 5) wrap.firstChild.remove();
@@ -384,32 +328,204 @@ export const Hud = {
   },
 };
 
+// ---------- window content ----------
+function gearLabel(g) {
+  const base = GEAR[g.base];
+  return `${esc(base.name)}${g.enh ? ` <b class="enh">+${g.enh}</b>` : ''}`;
+}
+
+function optionsHtml(g) {
+  return g.opts.map((o) => `<li>${esc(P.optionLabel(o))}</li>`).join('') || '<li class="muted">ไม่มีออฟชั่นเสริม</li>';
+}
+
+function inventoryHtml(g) {
+  const p = g.p;
+  const mats = Object.entries(p.mats);
+  let html = `<div class="row-meta"><span>${icon('coin')} ${fmt(p.gold)} เหรียญ</span><span>อุปกรณ์ ${p.gear.length}/${P.BAG_MAX}</span></div>`;
+  html += '<div class="sub-title">วัสดุและยา</div>';
+  html += mats.length
+    ? `<div class="mat-row">${mats.map(([id, n]) => {
+      const it = MATERIALS[id];
+      const act = it.type === 'potion' ? `data-act="use" data-id="${id}"` : '';
+      return `<button class="mat" ${act} style="--rc:${RARITY[it.rarity].color}" title="${esc(it.name)}">${icon(it.icon)}<span>${esc(it.name)}</span><b>x${n}</b></button>`;
+    }).join('')}</div>`
+    : '<div class="empty">ยังไม่มีวัสดุ</div>';
+  html += '<div class="sub-title">อุปกรณ์</div>';
+  if (!p.gear.length) return html + '<div class="empty">ยังไม่มีอุปกรณ์ ออกล่ามอนสเตอร์เพื่อหาของ</div>';
+  html += p.gear.map((item) => {
+    const base = GEAR[item.base];
+    const equipped = p.equip.weapon === item.uid || p.equip.armor === item.uid;
+    const canEquip = base.slot === 'armor' || base.classId === g.character.classId;
+    return `<div class="gear-row" style="--rc:${RARITY[base.rarity].color}">
+      <div class="gear-ico">${icon(base.icon)}</div>
+      <div class="gear-info"><b>${gearLabel(item)}</b><small>${base.slot === 'weapon' ? 'อาวุธ' : 'ชุดเกราะ'} · ${RARITY[base.rarity].label}${base.classId && base.classId !== g.character.classId ? ' · ของสายอาชีพอื่น' : ''}</small><ul>${optionsHtml(item)}</ul></div>
+      <div class="gear-act">
+        ${equipped ? '<span class="tag">สวมใส่อยู่</span>' : canEquip ? `<button class="btn-primary sm" data-act="equip" data-uid="${item.uid}">สวมใส่</button>` : ''}
+        ${equipped ? '' : `<button class="btn-ghost sm" data-act="sell" data-uid="${item.uid}">ขาย</button>`}
+      </div></div>`;
+  }).join('');
+  return html;
+}
+
+function equipHtml(g) {
+  const p = g.p;
+  const s = g.stats;
+  let html = '<div class="slots">';
+  for (const slot of ['weapon', 'armor']) {
+    const item = P.findGear(p, p.equip[slot]);
+    html += `<div class="slot-card${item ? '' : ' empty'}" style="--rc:${item ? RARITY[GEAR[item.base].rarity].color : 'var(--line)'}">
+      <div class="slot-ico">${icon(item ? GEAR[item.base].icon : slot === 'weapon' ? 'sword' : 'armor')}</div>
+      <div class="slot-info"><b>${slot === 'weapon' ? 'อาวุธ' : 'ชุดเกราะ'}</b>
+        <small>${item ? gearLabel(item) : 'ยังไม่ได้สวมใส่'}</small>
+        ${item ? `<ul>${optionsHtml(item)}</ul>` : ''}
+        ${item ? `<button class="btn-ghost sm" data-act="unequip" data-slot="${slot}">ถอด</button>` : ''}
+      </div></div>`;
+  }
+  html += '</div>';
+  html += `<div class="stat-list">${statRow('พลังโจมตี', s.atk)}${statRow('ป้องกัน', s.def)}${statRow('HP สูงสุด', s.maxHp)}${statRow('MP สูงสุด', s.maxMp)}${statRow('คริติคอล', s.crit + '%')}${statRow('ดาเมจคริ', s.critDmg + '%')}${statRow('ดาเมจสกิล', '+' + s.skillMg + '%')}${statRow('ลดคูลดาวน์', s.cdr + '%')}</div>`;
+
+  // enhancement for the equipped pieces
+  html += '<div class="sub-title">ตีบวก</div>';
+  const equipped = ['weapon', 'armor'].map((slot) => P.findGear(p, p.equip[slot])).filter(Boolean);
+  if (!equipped.length) return html + '<div class="empty">สวมใส่อุปกรณ์ก่อนจึงจะตีบวกได้</div>';
+  for (const item of equipped) {
+    const cost = P.enhCost(item.enh);
+    const stones = P.enhStones(item.enh);
+    const rate = Math.round(enhRate(item.enh) * 100);
+    const max = item.enh >= 15;
+    html += `<div class="enh-card">
+      <div class="enh-head"><b>${gearLabel(item)}</b><span>${max ? 'ขีดสุด' : `เป้าหมาย +${item.enh + 1} · โอกาส ${rate}%`}</span></div>
+      ${max ? '' : `<div class="enh-cost">${icon('coin')} ${fmt(cost)} · ${icon('gem')} หินเสริมพลัง ${stones} (มี ${p.mats.enh_stone || 0})</div>
+      ${item.enh + 1 > 7 ? '<div class="warn-note">ล้มเหลวที่ +7 ขึ้นไปจะลดระดับ 1 ขั้น</div>' : ''}
+      <button class="btn-primary" data-act="enhance" data-uid="${item.uid}">ตีบวก</button>`}
+    </div>`;
+  }
+  return html;
+}
+
+// Mirrors the rate table in data.js so the UI can show it.
+function enhRate(enh) {
+  return [1, 0.95, 0.9, 0.85, 0.8, 0.75, 0.6, 0.5, 0.4, 0.3, 0.2, 0.15, 0.1, 0.06, 0.04, 0.02][enh + 1] ?? 0;
+}
+
+function skillsHtml(g) {
+  const p = g.p;
+  const cls = g.character.classId;
+  const pts = P.skillPoints(p);
+  let html = `<div class="row-meta"><span>แต้มสกิลคงเหลือ <b class="pts">${pts}</b></span><span>+${2} แต้มต่อเลเวล</span></div>`;
+  html += '<div class="sub-title">ช่องปุ่มลัด (กด 1-6)</div><div class="hotbar-edit">';
+  for (let slot = 1; slot <= 6; slot++) {
+    const id = p.hotbar[slot - 1];
+    const s = id && g.skillMap[id];
+    html += `<div class="hb-slot${s ? '' : ' empty'}"><kbd>${slot}</kbd>${s ? icon(s.icon) : ''}<span>${s ? esc(s.name) : 'ว่าง'}</span>${s ? `<button class="x" data-act="hot" data-slot="${slot}" data-id="" aria-label="เอาออก">✕</button>` : ''}</div>`;
+  }
+  html += '</div>';
+  for (const line of SKILL_TREE[cls] || []) {
+    html += `<div class="sub-title">${esc(line.name)}</div><div class="tree">`;
+    for (const sk of line.tiers) {
+      const rank = p.skills[sk.id] || 0;
+      const reason = P.canLearn(p, sk.id);
+      html += `<div class="sk-card${rank ? ' learned' : ''}${reason && !rank ? ' locked' : ''}">
+        <div class="sk-top"><div class="sk-badge">${icon(sk.icon)}</div>
+          <div><b>${esc(sk.name)}</b><small>ขั้น ${sk.tier} · Lv ${TIER_LEVEL[sk.tier - 1]}</small></div>
+          <span class="rank">${rank}/${MAX_RANK}</span></div>
+        <small class="sk-desc">${skillDesc(sk)}</small>
+        ${rank ? `<div class="hot-btns">${[1, 2, 3, 4, 5, 6].map((n) => `<button class="${p.hotbar[n - 1] === sk.id ? 'on' : ''}" data-act="hot" data-slot="${n}" data-id="${sk.id}">${n}</button>`).join('')}</div>` : ''}
+        ${rank < MAX_RANK ? (reason ? `<small class="lock-note">${esc(reason)}</small>` : `<button class="btn-primary sm" data-act="learn" data-id="${sk.id}">${rank ? 'เพิ่มระดับ' : 'เรียนรู้'}</button>`) : ''}
+      </div>`;
+    }
+    html += '</div>';
+  }
+  const custom = Object.values(g.skillMap).filter((s) => s.line === 'custom');
+  if (custom.length) {
+    html += '<div class="sub-title">สกิลกำหนดเอง</div><div class="tree">' + custom.map((sk) => {
+      const rank = p.skills[sk.id] || 0;
+      return `<div class="sk-card${rank ? ' learned' : ''}"><div class="sk-top"><div class="sk-badge">${icon(sk.icon)}</div><div><b>${esc(sk.name)}</b><small>สร้างจาก Skill Lab</small></div><span class="rank">${rank}/${MAX_RANK}</span></div>
+      ${rank ? `<div class="hot-btns">${[1, 2, 3, 4, 5, 6].map((n) => `<button class="${p.hotbar[n - 1] === sk.id ? 'on' : ''}" data-act="hot" data-slot="${n}" data-id="${sk.id}">${n}</button>`).join('')}</div>` : `<button class="btn-primary sm" data-act="learn" data-id="${sk.id}">เรียนรู้</button>`}</div>`;
+    }).join('') + '</div>';
+  }
+  return html;
+}
+
+function skillDesc(sk) {
+  const bits = [];
+  if (sk.heal) bits.push(`ฟื้น ${Math.round(sk.heal * 100)}% HP`);
+  if (sk.mult) bits.push(`ดาเมจ ${Math.round(sk.mult * 100)}%`);
+  if (sk.shield) bits.push(`ลดความเสียหาย ${Math.round(sk.shield * 100)}% (5 วิ)`);
+  if (sk.aoe) bits.push('โจมตีทุกเป้าในระยะ');
+  bits.push(`คูลดาวน์ ${(sk.cd / 1000).toFixed(1)} วิ`);
+  bits.push(`MP ${sk.mp}`);
+  return bits.join(' · ');
+}
+
+function questsHtml(g, hud) {
+  const p = g.p;
+  const tabs = [['active', 'กำลังทำ'], ['done', 'สำเร็จแล้ว'], ['open', 'ยังไม่รับ']];
+  let html = `<div class="tabs">${tabs.map(([id, l]) => `<button class="tab${hud.windowData.tab === id ? ' on' : ''}" data-act="tab" data-tab="${id}">${l}</button>`).join('')}</div>`;
+  const list = Object.entries(QUESTS).filter(([id]) => {
+    const q = p.quests[id];
+    if (hud.windowData.tab === 'open') return !q && p.level >= QUESTS[id].minLevel;
+    if (hud.windowData.tab === 'done') return q?.status === 'done';
+    return q?.status === 'active';
+  });
+  html += list.map(([id, quest]) => {
+    const q = p.quests[id];
+    const step = q && q.status === 'active' ? quest.steps[q.step] : null;
+    const prog = P.stepProgressText(p, id);
+    const pct = step && (step.type === 'kill' || step.type === 'collect') ? Math.min(100, (q.count / step.count) * 100) : 0;
+    const tracked = hud.tracked === id || (!hud.tracked && hud.trackedFallback(g) === id);
+    return `<div class="quest-card">
+      <div class="qc-head"><b>${esc(quest.title)}</b><small>${esc(NPCS[quest.giver].name)}</small></div>
+      ${step ? `<p>${esc(step.text)}</p>` : `<p>${q ? 'ภารกิจเสร็จสมบูรณ์' : 'คุยกับ ' + esc(NPCS[quest.giver].name) + ' เพื่อรับภารกิจ'}</p>`}
+      ${prog ? `<div class="qc-prog"><span style="width:${pct}%"></span><em>${prog}</em></div>` : ''}
+      ${q?.status === 'active' ? `<button class="btn-ghost sm" data-act="track" data-quest="${id}">${tracked ? 'กำลังติดตาม' : 'ติดตามภารกิจ'}</button>` : ''}
+    </div>`;
+  }).join('') || '<div class="empty">ไม่มีรายการในหมวดนี้</div>';
+  return html;
+}
+
+function mapHtml(g) {
+  const p = g.p;
+  return Object.entries(MAPS).map(([id, m]) => {
+    const ok = P.mapUnlocked(p, id);
+    return `<div class="map-card${ok ? '' : ' locked'}${g.map === id ? ' here' : ''}">
+      <div class="map-ico">${icon(id === 'town' ? 'shield' : id === 'forest' ? 'leaf' : 'ore')}</div>
+      <div class="map-info"><b>${esc(m.name)}</b><small>${m.levelText}${ok ? '' : ' · ต้องเลเวล ' + m.minLevel}</small></div>
+      ${g.map === id ? '<span class="tag">อยู่ที่นี่</span>' : ok ? `<button class="btn-primary sm" data-act="travel" data-map="${id}">${icon('arrow')} ไป</button>` : `<span class="tag lock">${icon('lock')}</span>`}
+    </div>`;
+  }).join('');
+}
+
+function statusHtml(g) {
+  const p = g.p;
+  const s = g.stats;
+  return `<div class="status-head"><canvas id="status-thumb" width="180" height="180"></canvas>
+    <div><b>${esc(g.character.name)}</b><small>${CLASSES[g.character.classId].name} · เลเวล ${p.level}</small>
+    <div class="xp"><span style="width:${(p.exp / P.expToNext(p.level)) * 100}%"></span></div><small>${p.exp} / ${P.expToNext(p.level)} EXP</small></div></div>
+    <div class="stat-list">${statRow('พลังโจมตี', s.atk)}${statRow('ป้องกัน', s.def)}${statRow('HP สูงสุด', s.maxHp)}${statRow('MP สูงสุด', s.maxMp)}${statRow('เหรียญ', fmt(p.gold))}${statRow('แต้มสกิล', P.skillPoints(p))}</div>`;
+}
+
+function npcHtml(g, npcId) {
+  const p = g.p;
+  const npc = NPCS[npcId];
+  let html = `<div class="npc-head"><small>${esc(npc.role)}</small><p class="greet">${esc(npc.greet)}</p></div>`;
+  html += Object.entries(p.quests).filter(([id, q]) => q.status === 'active' && (QUESTS[id].giver === npcId || P.currentStep(p, id)?.npc === npcId))
+    .map(([id]) => `<div class="quest-card"><div class="qc-head"><b>${esc(QUESTS[id].title)}</b></div><p>${esc(P.currentStep(p, id)?.text || '')}</p></div>`).join('');
+  if (npc.shop) {
+    html += `<div class="sub-title">${icon('shop')} สินค้า</div><div class="shop-row">${npc.shop.map((id) => {
+      const it = MATERIALS[id];
+      return `<button class="shop-item" data-act="buy" data-id="${id}" style="--rc:${RARITY[it.rarity].color}">${icon(it.icon)}<span>${esc(it.name)}</span><b>${icon('coin')} ${it.price}</b></button>`;
+    }).join('')}</div>`;
+  }
+  html += `<div class="row-meta"><span>${icon('coin')} ${fmt(p.gold)} เหรียญ</span><button class="btn-ghost sm" data-act="talk" data-npc="${npcId}">คุยต่อ</button></div>`;
+  return html;
+}
+
 // ---------- small render helpers ----------
 function setBar(id, ratio) {
   $(id).style.width = Math.max(0, Math.min(1, ratio)) * 100 + '%';
 }
 
 function statRow(label, value) {
-  return `<div class="stat"><span>${label}</span><b>${typeof value === 'number' ? value.toLocaleString('th-TH') : value}</b></div>`;
-}
-
-function progressPct(p, id) {
-  const step = P.currentStep(p, id);
-  const q = p.quests[id];
-  if (!step || !q) return 0;
-  return Math.min(100, (q.count / step.count) * 100);
-}
-
-function itemTile(id, n, actionable) {
-  const it = ITEMS[id];
-  const color = RARITY[it.rarity].color;
-  const act = it.type === 'potion' ? `data-act="use" data-id="${id}"` : ['weapon', 'armor'].includes(it.type) ? `data-act="equip" data-id="${id}"` : '';
-  return `<button class="tile" ${actionable && act ? act : 'disabled'} style="--rc:${color}" title="${esc(it.name)}">
-    <i>${icon(it.icon)}</i><span class="count">${n > 1 ? n : ''}</span><small>${esc(it.name)}</small></button>`;
-}
-
-function shopTile(id) {
-  const it = ITEMS[id];
-  return `<button class="tile shop" data-act="buy" data-id="${id}" style="--rc:${RARITY[it.rarity].color}" title="${esc(it.name)}">
-    <i>${icon(it.icon)}</i><small>${esc(it.name)}</small><b class="price">${icon('coin')} ${it.price}</b></button>`;
+  return `<div class="stat"><span>${label}</span><b>${typeof value === 'number' ? fmt(value) : value}</b></div>`;
 }
