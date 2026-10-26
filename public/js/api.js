@@ -31,6 +31,10 @@ function localHandle(method, url, body, token) {
   if (path === '/api/config') {
     return { googleClientId: '', classes: Object.keys(CLASSES), genders: ['male', 'female'], maxCharacters: 3, local: true };
   }
+  if (path === '/api/servers' && method === 'GET') {
+    return { servers: [{ id: 'local', name: 'เครื่องนี้ (ออฟไลน์)', status: 'open', population: 0 }] };
+  }
+  if (path === '/api/announcements' && method === 'GET') return { announcements: [] };
   if (path === '/api/auth/guest' && method === 'POST') {
     const u = { id: rid('u_'), name: 'Guest-' + Math.random().toString(16).slice(2, 6), type: 'guest' };
     const newToken = rid('t_') + rid('');
@@ -59,6 +63,7 @@ function localHandle(method, url, body, token) {
     const ch = {
       id: rid('c_'),
       userId: u.id,
+      serverId: 'local',
       name,
       gender: body.gender === 'female' ? 'female' : 'male',
       classId: CLASSES[body.classId] ? body.classId : 'swordsman',

@@ -276,6 +276,18 @@ export const MAPS = {
     ],
     spawns: [], nodes: [['crystal_ore', 14]],
   },
+  camp: {
+    kind: 'quest', name: 'ค่ายชายแดน', levelText: 'เลเวล 6-12', minLevel: 6, size: 80, biome: 'camp', layout: 'camp', sky: '#f3e3c4',
+    spawns: [], nodes: [],
+  },
+  city: {
+    kind: 'quest', name: 'นครเมฆา', levelText: 'เลเวล 16-24', minLevel: 16, size: 80, biome: 'city', layout: 'city', sky: '#e6e0f2',
+    spawns: [], nodes: [],
+  },
+  sky: {
+    kind: 'quest', name: 'ปราสาทเวหา', levelText: 'เลเวล 24-30', minLevel: 24, size: 80, biome: 'sky', layout: 'sky', sky: '#e9f4ff',
+    spawns: [], nodes: [],
+  },
   dungeon: { name: 'ดันเจี้ยน', levelText: '', minLevel: 1, size: 36, biome: 'dungeon', sky: '#2a2440', spawns: [], hidden: true },
 };
 
@@ -316,11 +328,21 @@ export const PORTALS = {
   town: [{ x: 0, z: -17.5, to: 'forest', arrive: [0, -13], label: 'ป่าวิญญาณ' }],
   forest: [
     { x: 0, z: -55, to: 'town', arrive: [0, -14], label: 'ดินแดนสวรรค์' },
+    { x: 0, z: 55, to: 'camp', arrive: [0, 34], label: 'ค่ายชายแดน' },
     { x: -55, z: 0, to: 'herbfield', arrive: [52, 0], label: 'ทุ่งสมุนไพร' },
     { x: 55, z: 0, to: 'meadow', arrive: [-52, 0], label: 'ทุ่งแสงทอง' },
   ],
   herbfield: [{ x: 55, z: 0, to: 'forest', arrive: [-52, 0], label: 'ป่าวิญญาณ' }],
-  mountain: [{ x: 0, z: -55, to: 'meadow', arrive: [0, 52], label: 'ทุ่งแสงทอง' }],
+  mountain: [
+    { x: 0, z: -55, to: 'meadow', arrive: [0, 52], label: 'ทุ่งแสงทอง' },
+    { x: 55, z: 0, to: 'city', arrive: [-34, 0], label: 'นครเมฆา' },
+  ],
+  camp: [{ x: 0, z: 37, to: 'forest', arrive: [0, 48], label: 'ป่าวิญญาณ' }],
+  city: [
+    { x: -37, z: 0, to: 'mountain', arrive: [50, 0], label: 'ไหล่เขาหินเทือก' },
+    { x: 37, z: 0, to: 'sky', arrive: [-34, 0], label: 'ปราสาทเวหา' },
+  ],
+  sky: [{ x: -37, z: 0, to: 'city', arrive: [34, 0], label: 'นครเมฆา' }],
   meadow: [
     { x: 0, z: 55, to: 'mountain', arrive: [0, -52], label: 'ไหล่เขาหินเทือก' },
     { x: -55, z: 0, to: 'forest', arrive: [52, 0], label: 'ป่าวิญญาณ' },
@@ -334,6 +356,26 @@ export const PORTALS = {
 };
 
 export const NPCS = {
+  scout: {
+    name: 'หัวหน้าลาดตระเวน ลิเลีย', role: 'หน่วยลาดตระเวน', map: 'camp', pos: [-6, -6],
+    look: { gender: 'female', classId: 'assassin', appearance: { hairStyle: 4, hair: '#a04a2c', top: { style: 1, color: '#3a5a3a' } } },
+    greet: 'ป่าทางเหนือมีหมาป่าทุ่งออกอาละวาด ช่วยกำจัดให้หน่อย',
+  },
+  harold: {
+    name: 'พ่อค้าใหญ่ ฮาโรลด์', role: 'พ่อค้า', map: 'city', pos: [-6, -6],
+    look: { gender: 'male', classId: 'priest', appearance: { hairStyle: 2, hair: '#4a3a2c', top: { style: 2, color: '#c9a04a' } } },
+    greet: 'ทางขึ้นเขามีโกเลมน้ำแข็งเยอะ ถ้าเอามาให้ข้า ข้าจะจ่ายดี',
+  },
+  mage_master: {
+    name: 'จอมเวท เมธิลดา', role: 'อาจารย์เวท', map: 'city', pos: [6, 6],
+    look: { gender: 'female', classId: 'mage', appearance: { hairStyle: 1, hair: '#e0e0ff', top: { style: 1, color: '#6a4ad0' } } },
+    greet: 'ข้าต้องการเห็นว่าเจ้ารับมือกับเวทเจ็ดสีได้หรือไม่',
+  },
+  envoy: {
+    name: 'ทูตแห่งปราสาท เซลาดอน', role: 'ทูตราชสำนัก', map: 'sky', pos: [0, -6],
+    look: { gender: 'male', classId: 'swordsman', appearance: { hairStyle: 0, hair: '#f0e6c8', top: { style: 2, color: '#ffffff' } } },
+    greet: 'ปราสาทนี้ลอยอยู่บนเมฆ ผู้ที่คู่ควรจะได้ขึ้นมาที่นี่',
+  },
   dungeonmaster: {
     name: 'ผู้คุมดันเจี้ยน เรนน่า', role: 'ผู้คุมดันเจี้ยน', map: 'town', pos: [-8, 4],
     look: { gender: 'female', classId: 'priest', appearance: { hairStyle: 3, hair: '#2b2b44', top: { style: 2, color: '#ff6f9c' } } },
@@ -374,6 +416,33 @@ export const NPCS = {
 // Quest steps: talk (npc), kill (monster, optional map), collect (item), visit (map).
 // reward.gear = { slot, band, grade } gives a random piece of that band and grade.
 export const QUESTS = {
+  camp_1: {
+    title: 'ก้าวแรกชายแดน', giver: 'scout', minLevel: 6,
+    steps: [
+      { type: 'talk', npc: 'scout', text: 'รับงานจากหัวหน้าลิเลีย' },
+      { type: 'kill', monster: 'wild_wolf', map: 'meadow', count: 5, text: 'กำจัดหมาป่าทุ่ง 5 ตัวในทุ่งแสงทอง' },
+      { type: 'talk', npc: 'scout', text: 'รายงานผลต่อหัวหน้าลิเลีย' },
+    ],
+    reward: { exp: 900, gold: 300 },
+  },
+  city_1: {
+    title: 'ของจากเหมืองแข็ง', giver: 'harold', minLevel: 16,
+    steps: [
+      { type: 'talk', npc: 'harold', text: 'รับงานจากพ่อค้าฮาโรลด์' },
+      { type: 'kill', monster: 'frost_golem', map: 'mine', count: 4, text: 'ปราบโกเลมน้ำแข็ง 4 ตัวในเหมืองลาวาร้อน' },
+      { type: 'talk', npc: 'mage_master', text: 'นำเศษแร่ไปให้จอมเวทเมธิลดา' },
+    ],
+    reward: { exp: 2200, gold: 700 },
+  },
+  sky_1: {
+    title: 'ผู้คู่ควรแห่งเวหา', giver: 'envoy', minLevel: 24,
+    steps: [
+      { type: 'talk', npc: 'envoy', text: 'พบทูตเซลาดอนบนปราสาท' },
+      { type: 'kill', monster: 'gold_golem', map: 'ruin', count: 4, text: 'ปราบโกเลมทองคำ 4 ตัวในซากปรักสวรรค์' },
+      { type: 'talk', npc: 'envoy', text: 'รายงานผลต่อทูตเซลาดอน' },
+    ],
+    reward: { exp: 4500, gold: 1500 },
+  },
   main_1: {
     title: 'เจตนารมณ์แห่งสวรรค์', giver: 'elder', minLevel: 1,
     steps: [

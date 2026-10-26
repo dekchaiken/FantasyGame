@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { NPCS } from './data.js';
 
 // Field maps (forest and mine): a square tile arena with biome ground, decor and rock walls.
 export const TILE = 2;
@@ -24,6 +25,15 @@ const BIOMES = {
   },
   meadow: {
     ground: ['#9ccf5f', '#8ebf55', '#b2dc73'], path: '#d6b97a', fog: '#fff0c2', lava: null,
+  },
+  camp: {
+    ground: ['#c9a46a', '#b8935c', '#d9b47c'], path: '#8a6a3e', fog: '#f3e3c4', lava: null,
+  },
+  city: {
+    ground: ['#b9b4c6', '#a7a2b8', '#c8c3d6'], path: '#8f8aa0', fog: '#e6e0f2', lava: null,
+  },
+  sky: {
+    ground: ['#e9f4ff', '#dcecfa', '#f4fbff'], path: '#c9d9ea', fog: '#e9f4ff', lava: null,
   },
   herb: {
     ground: ['#7fd16a', '#6cc25a', '#93de7a'], path: '#c9b07a', fog: '#e6ffd9', lava: null,
@@ -118,7 +128,8 @@ export function buildField(scene, mapId, def, avoid) {
 
   // decor: trees in the forest, rock spires and crystals in the mine
   const avoidOk = (x, z) => avoid.every((a) => Math.hypot(a[0] - x, a[1] - z) > 3.5) && Math.hypot(x, z) > 3;
-  for (let k = 0, placed = 0; k < 400 && placed < 46; k++) {
+  // scattered trees and spires only on open maps; quest towns get their own layout instead
+  for (let k = 0, placed = 0; !def.layout && k < 400 && placed < 46; k++) {
     const x = (rnd() * 2 - 1) * (half - 2.5);
     const z = (rnd() * 2 - 1) * (half - 2.5);
     if (!avoidOk(x, z)) continue;
@@ -126,6 +137,8 @@ export function buildField(scene, mapId, def, avoid) {
     if (def.biome === 'forest' || def.biome === 'herb') addTree(scene, solids, x, z, 0.8 + rnd() * 0.5, rnd);
     else addSpire(scene, solids, x, z, 0.8 + rnd() * 0.7, rnd);
   }
+
+  if (def.layout) addLayout(scene, solids, def, half, rnd, mapId);
 
   // boundary walls
   const edge = half - 0.5;
@@ -153,6 +166,65 @@ function addTree(scene, solids, x, z, s, rnd) {
     g.add(l);
   }
   solids.push({ minX: x - 0.6 * s, maxX: x + 0.6 * s, minZ: z - 0.6 * s, maxZ: z + 0.6 * s });
+}
+
+// Quest towns. Roads (the two axes) and the spots where NPCs stand are kept clear.
+function addLayout(scene, solids, def, half, rnd, mapId) {
+  const npcSpots = Object.values(NPCS).filter((n) => n.map === mapId).map((n) => n.pos);
+  const clear = (x, z, r = 2.5) => Math.abs(x) < 3.5 || Math.abs(z) < 3.5 || npcSpots.some((p) => Math.hypot(p[0] - x, p[1] - z) < 4 + r)
+    || Math.abs(x) > half - 4 || Math.abs(z) > half - 4;
+  const box = (x, y, z, w, h, d, color) => {
+    const m = cast(new THREE.Mesh(new THREE.BoxGeometry(w, h, d), std(color)));
+    m.position.set(x, y + h / 2, z);
+    scene.add(m);
+    solids.push({ minX: x - w / 2, maxX: x + w / 2, minZ: z - d / 2, maxZ: z + d / 2 });
+  };
+  if (def.layout === 'camp') {
+    // tents and a bonfire
+    const tent = ['#8a4a2c', '#3a6a5a', '#b8a36a'];
+    for (let k = 0, placed = 0; k < 300 && placed < 16; k++) {
+      const x = (rnd() * 2 - 1) * (half - 6);
+      const z = (rnd() * 2 - 1) * (half - 6);
+      if (clear(x, z, 3)) continue;
+      placed++;
+      const cone = cast(new THREE.Mesh(new THREE.ConeGeometry(1.4, 1.8, 6), std(tent[placed % 3])));
+      cone.position.set(x, 0.9, z);
+      scene.add(cone);
+      solids.push({ minX: x - 1.1, maxX: x + 1.1, minZ: z - 1.1, maxZ: z + 1.1 });
+    }
+    const fire = new THREE.Mesh(new THREE.CylinderGeometry(0.9, 1, 0.3, 10), std('#4a3a2c'));
+    fire.position.set(-14, 0.15, -12);
+    scene.add(fire);
+    const flame = new THREE.Mesh(new THREE.ConeGeometry(0.5, 1.2, 8), new THREE.MeshStandardMaterial({ color: '#ffb84d', emissive: '#ff8a2a', emissiveIntensity: 1.2 }));
+    flame.position.set(-14, 0.9, -12);
+    scene.add(flame);
+  } else if (def.layout === 'city') {
+    // a street grid of houses; the lanes stay open
+    const roof = ['#c9605a', '#5a6fa8', '#a8905a', '#6a9a7a'];
+    const wall = ['#f1e7d3', '#e8dcc5', '#ddd0bd'];
+    for (let x = -half + 6; x < half - 4; x += 8) {
+      for (let z = -half + 6; z < half - 4; z += 8) {
+        if (rnd() < 0.12 || clear(x, z, 2)) continue;
+        const w = 5 + Math.floor(rnd() * 2), d = 5 + Math.floor(rnd() * 2), h = 3 + Math.floor(rnd() * 3);
+        box(x, 0, z, w, h, d, wall[Math.floor(rnd() * wall.length)]);
+        box(x, h, z, w + 0.6, 0.6, d + 0.6, roof[Math.floor(rnd() * roof.length)]);
+      }
+    }
+  } else if (def.layout === 'sky') {
+    // marble pillars around a courtyard, and floating platforms
+    const marble = '#f6fbff';
+    for (let k = 0; k < 24; k++) {
+      const a = (k / 24) * Math.PI * 2;
+      const x = Math.cos(a) * 26, z = Math.sin(a) * 26;
+      box(x, 0, z, 1.6, 6, 1.6, marble);
+    }
+    for (let k = 0, placed = 0; k < 200 && placed < 8; k++) {
+      const x = (rnd() * 2 - 1) * (half - 8), z = (rnd() * 2 - 1) * (half - 8);
+      if (clear(x, z, 4) || Math.hypot(x, z) < 12) continue;
+      placed++;
+      box(x, -0.2, z, 4 + rnd() * 3, 0.6, 4 + rnd() * 3, '#dfeaf7');
+    }
+  }
 }
 
 function addSpire(scene, solids, x, z, s, rnd) {

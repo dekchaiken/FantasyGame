@@ -82,3 +82,16 @@ tests/             progress.test.mjs (unit) และ e2e.mjs (เบราว�
 - สัตว์เลี้ยง แฟชั่น กิจกรรม และตลาดผู้เล่น
 - มอนสเตอร์บอส, ดันเจียน, สกิลระดับสูงกว่า Lv 8
 - บัญชีจริงบน Vercel (ดูหัวข้อ Deploy)
+
+## Servers and admin panel
+
+- Each server is a separate world. A new install starts with one server (`เซิร์ฟเวอร์ 1`). Characters belong to a server, and the character select screen has a server picker.
+- Open a server, then open more as players grow. Servers can be set to **open**, **maintenance** (no new characters) or **closed**, and when population is low, one server can be merged into another (all its characters move, then it is removed).
+- The admin panel is at `/admin.html`. It needs `ADMIN_TOKEN` in the environment; without it the admin API refuses every request. The panel can create, rename, change status, merge and delete servers; search characters, add gold or items, grant VIP for days, or delete a character; and publish announcements (to all servers or one) that show on the character select screen.
+- VIP is decided by the server. The game client cannot switch it on. Note that gold and items are still saved from the client, so server-side checks for those are not in place yet.
+
+```bash
+ADMIN_TOKEN=change-me node server.js
+```
+
+The static build on Vercel has no server, so it runs one local world and no admin panel.

@@ -9,6 +9,10 @@ const PUBLIC_DIR = path.join(__dirname, 'public');
 const DATA_FILE = process.env.DATA_FILE || path.join(__dirname, 'data', 'db.json');
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const MAX_CHARACTERS = 3;
+// Admin panel access: set ADMIN_TOKEN to enable it. Without it the admin API refuses every request.
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || '';
+const SERVER_STATUSES = ['open', 'maintenance', 'closed'];
+const DAY = 24 * 60 * 60 * 1000;
 
 const CLASS_IDS = ['swordsman', 'assassin', 'mage', 'priest'];
 const GENDERS = ['male', 'female'];
@@ -32,7 +36,16 @@ function loadDb() {
   }
 }
 
-let db = loadDb();
+// Fills in what older saves lack: the first server, server ids on characters, the announcements list.
+function migrateDb(d) {
+  d.servers ||= [];
+  d.announcements ||= [];
+  if (!d.servers.length) d.servers.push({ id: 's1', name: 'เซิร์ฟเวอร์ 1', status: 'open', createdAt: Date.now() });
+  for (const c of d.characters || []) c.serverId ||= d.servers[0].id;
+  return d;
+}
+
+let db = migrateDb(loadDb());
 
 function saveDb() {
   fs.mkdirSync(path.dirname(DATA_FILE), { recursive: true });
@@ -86,6 +99,35 @@ function requireUser(req, res) {
   const user = authUser(req);
   if (!user) send(res, 401, { error: 'กรุณาเข้าสู่ระบบก่อน' });
   return user;
+}
+
+// VIP is granted by the admin with an end date. The server decides it; the client cannot set it.
+function refreshVip(ch) {
+  if (!ch.progress) return;
+  ch.progress.vip = !!ch.vipUntil && Date.now() < ch.vipUntil;
+  if (!ch.progress.vip) ch.vipUntil = null;
+}
+
+function serverById(id) {
+  return db.servers.find((s) => s.id === id) || null;
+}
+
+function population(serverId) {
+  return db.characters.filter((c) => c.serverId === serverId).length;
+}
+
+function requireAdmin(req, res) {
+  if (!ADMIN_TOKEN) {
+    send(res, 503, { error: 'ยังไม่ได้ตั้งค่า ADMIN_TOKEN ในเซิร์ฟเวอร์' });
+    return false;
+  }
+  const given = Buffer.from(String(req.headers['x-admin-token'] || ''));
+  const want = Buffer.from(ADMIN_TOKEN);
+  if (given.length !== want.length || !crypto.timingSafeEqual(given, want)) {
+    send(res, 401, { error: 'รหัสผู้ดูแลไม่ถูกต้อง' });
+    return false;
+  }
+  return true;
 }
 
 function createSession(userId) {
@@ -176,6 +218,155 @@ async function verifyGoogleCredential(credential) {
   return info;
 }
 
+// ---------- admin API (requires X-Admin-Token) ----------
+async function handleAdmin(req, res, url) {
+  const p = url.pathname;
+  const m = req.method;
+
+  if (p === '/api/admin/overview' && m === 'GET') {
+    return send(res, 200, {
+      servers: db.servers.map((s) => ({ ...s, population: population(s.id) })),
+      users: db.users.length,
+      characters: db.characters.length,
+      announcements: db.announcements.length,
+    });
+  }
+
+  if (p === '/api/admin/servers' && m === 'POST') {
+    const body = await readBody(req);
+    const name = clean(body.name, 30);
+    if (name.length < 2) return send(res, 400, { error: 'ชื่อเซิร์ฟเวอร์ต้องมีอย่างน้อย 2 ตัวอักษร' });
+    const n = db.servers.reduce((max, s) => Math.max(max, Number(s.id.slice(1)) || 0), 0) + 1;
+    const server = { id: `s${n}`, name, status: 'open', createdAt: Date.now() };
+    db.servers.push(server);
+    saveDb();
+    return send(res, 201, { server });
+  }
+
+  const serverMatch = p.match(/^\/api\/admin\/servers\/(s\d+)$/);
+  if (serverMatch) {
+    const server = serverById(serverMatch[1]);
+    if (!server) return send(res, 404, { error: 'ไม่พบเซิร์ฟเวอร์' });
+    if (m === 'PATCH') {
+      const body = await readBody(req);
+      if (body.name !== undefined) {
+        const name = clean(body.name, 30);
+        if (name.length < 2) return send(res, 400, { error: 'ชื่อเซิร์ฟเวอร์ต้องมีอย่างน้อย 2 ตัวอักษร' });
+        server.name = name;
+      }
+      if (body.status !== undefined) {
+        if (!SERVER_STATUSES.includes(body.status)) return send(res, 400, { error: 'สถานะไม่ถูกต้อง' });
+        server.status = body.status;
+      }
+      saveDb();
+      return send(res, 200, { server: { ...server, population: population(server.id) } });
+    }
+    if (m === 'DELETE') {
+      if (population(server.id) > 0) return send(res, 400, { error: 'ต้องย้ายตัวละครออกก่อน (ใช้รวมเซิร์ฟเวอร์)' });
+      if (db.servers.length === 1) return send(res, 400, { error: 'ต้องมีเซิร์ฟเวอร์อย่างน้อย 1 เซิร์ฟเวอร์' });
+      db.servers = db.servers.filter((s) => s !== server);
+      saveDb();
+      return send(res, 200, { ok: true });
+    }
+  }
+
+  // Merge: every character on one server moves to another, then the old server is removed.
+  const mergeMatch = p.match(/^\/api\/admin\/servers\/(s\d+)\/merge$/);
+  if (mergeMatch && m === 'POST') {
+    const from = serverById(mergeMatch[1]);
+    const body = await readBody(req);
+    const into = serverById(body.into);
+    if (!from || !into) return send(res, 404, { error: 'ไม่พบเซิร์ฟเวอร์' });
+    if (from === into) return send(res, 400, { error: 'เลือกเซิร์ฟเวอร์ปลายทางคนละเซิร์ฟเวอร์' });
+    let moved = 0;
+    for (const c of db.characters) {
+      if (c.serverId === from.id) { c.serverId = into.id; moved++; }
+    }
+    db.servers = db.servers.filter((s) => s !== from);
+    saveDb();
+    return send(res, 200, { moved, into: into.id });
+  }
+
+  if (p === '/api/admin/characters' && m === 'GET') {
+    const server = url.searchParams.get('server');
+    const q = (url.searchParams.get('q') || '').toLowerCase();
+    const list = db.characters
+      .filter((c) => (!server || c.serverId === server) && (!q || c.name.toLowerCase().includes(q)))
+      .slice(0, 200)
+      .map((c) => {
+        const user = db.users.find((u) => u.id === c.userId);
+        return {
+          id: c.id, name: c.name, classId: c.classId, serverId: c.serverId, userName: user?.name || '?',
+          level: c.progress?.level || 1, gold: c.progress?.gold || 0, job: c.progress?.job || null,
+          vipUntil: c.vipUntil || null, createdAt: c.createdAt,
+        };
+      });
+    return send(res, 200, { characters: list });
+  }
+
+  const charMatch = p.match(/^\/api\/admin\/characters\/([\w-]+)$/);
+  if (charMatch) {
+    const ch = db.characters.find((c) => c.id === charMatch[1]);
+    if (!ch) return send(res, 404, { error: 'ไม่พบตัวละคร' });
+    if (m === 'DELETE') {
+      db.characters = db.characters.filter((c) => c !== ch);
+      saveDb();
+      return send(res, 200, { ok: true });
+    }
+    if (m === 'PATCH') {
+      if (!progressLib) return send(res, 503, { error: 'ระบบความคืบหน้ายังไม่พร้อม ลองใหม่อีกครั้ง' });
+      const body = await readBody(req);
+      const prog = ch.progress || progressLib.normalize({}, ch.classId);
+      if (Number.isInteger(body.gold)) prog.gold = Math.max(0, prog.gold + body.gold);
+      if (body.mats && typeof body.mats === 'object') {
+        for (const [id, n] of Object.entries(body.mats)) {
+          if (Number.isInteger(n) && n > 0) prog.mats[id] = Math.min(999, (prog.mats[id] || 0) + n);
+        }
+      }
+      if (Number.isInteger(body.vipDays) && body.vipDays > 0) {
+        ch.vipUntil = Math.max(Date.now(), ch.vipUntil || 0) + body.vipDays * DAY;
+      }
+      if (body.vipOff === true) ch.vipUntil = null;
+      ch.progress = progressLib.normalize(prog, ch.classId);
+      refreshVip(ch);
+      saveDb();
+      return send(res, 200, { character: ch });
+    }
+  }
+
+  if (p === '/api/admin/announcements' && m === 'GET') {
+    return send(res, 200, { announcements: db.announcements.sort((a, b) => b.createdAt - a.createdAt) });
+  }
+  if (p === '/api/admin/announcements' && m === 'POST') {
+    const body = await readBody(req);
+    const title = clean(body.title, 60);
+    const text = clean(body.body, 400);
+    if (!title || !text) return send(res, 400, { error: 'ต้องใส่หัวข้อและเนื้อหา' });
+    const a = { id: uid('a_'), title, body: text, serverId: body.serverId || null, active: body.active !== false, createdAt: Date.now() };
+    db.announcements.push(a);
+    saveDb();
+    return send(res, 201, { announcement: a });
+  }
+  const annMatch = p.match(/^\/api\/admin\/announcements\/([\w-]+)$/);
+  if (annMatch) {
+    const a = db.announcements.find((x) => x.id === annMatch[1]);
+    if (!a) return send(res, 404, { error: 'ไม่พบประกาศ' });
+    if (m === 'PATCH') {
+      const body = await readBody(req);
+      if (body.active !== undefined) a.active = !!body.active;
+      saveDb();
+      return send(res, 200, { announcement: a });
+    }
+    if (m === 'DELETE') {
+      db.announcements = db.announcements.filter((x) => x !== a);
+      saveDb();
+      return send(res, 200, { ok: true });
+    }
+  }
+
+  return send(res, 404, { error: 'ไม่พบ API ผู้ดูแลนี้' });
+}
+
 // ---------- routes ----------
 async function handleApi(req, res, url) {
   const p = url.pathname;
@@ -221,10 +412,27 @@ async function handleApi(req, res, url) {
     return send(res, 200, { user: publicUser(user) });
   }
 
+  if (p === '/api/servers' && m === 'GET') {
+    return send(res, 200, { servers: db.servers.map((s) => ({ id: s.id, name: s.name, status: s.status, population: population(s.id) })) });
+  }
+
+  if (p === '/api/announcements' && m === 'GET') {
+    const server = url.searchParams.get('server');
+    const list = db.announcements
+      .filter((a) => a.active && (!a.serverId || a.serverId === server))
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(0, 10)
+      .map(({ id, title, body, createdAt }) => ({ id, title, body, createdAt }));
+    return send(res, 200, { announcements: list });
+  }
+
   if (p === '/api/characters' && m === 'GET') {
     const user = requireUser(req, res);
     if (!user) return;
-    return send(res, 200, { characters: db.characters.filter((c) => c.userId === user.id) });
+    const server = url.searchParams.get('server');
+    const mine = db.characters.filter((c) => c.userId === user.id && (!server || c.serverId === server));
+    mine.forEach(refreshVip);
+    return send(res, 200, { characters: mine });
   }
 
   if (p === '/api/characters' && m === 'POST') {
@@ -233,6 +441,9 @@ async function handleApi(req, res, url) {
     const mine = db.characters.filter((c) => c.userId === user.id);
     if (mine.length >= MAX_CHARACTERS) return send(res, 400, { error: `สร้างตัวละครได้สูงสุด ${MAX_CHARACTERS} ตัว` });
     const body = await readBody(req);
+    const server = serverById(body.serverId);
+    if (!server) return send(res, 400, { error: 'ไม่พบเซิร์ฟเวอร์นี้' });
+    if (server.status !== 'open') return send(res, 400, { error: `เซิร์ฟเวอร์นี้ ${server.status === 'maintenance' ? 'กำลังปรับปรุง' : 'ปิดแล้ว'}` });
     const name = clean(body.name, 12);
     if (name.length < 2) return send(res, 400, { error: 'ชื่อต้องมีอย่างน้อย 2 ตัวอักษร' });
     if (db.characters.some((c) => c.name.toLowerCase() === name.toLowerCase())) {
@@ -247,6 +458,7 @@ async function handleApi(req, res, url) {
       gender: body.gender,
       classId: body.classId,
       appearance: sanitizeAppearance(body.appearance),
+      serverId: server.id,
       level: 1,
       createdAt: Date.now(),
     };
@@ -269,11 +481,18 @@ async function handleApi(req, res, url) {
     if (m === 'PUT') {
       const body = await readBody(req);
       if (body.appearance) ch.appearance = sanitizeAppearance(body.appearance);
-      if (body.progress) ch.progress = progressLib ? progressLib.normalize(body.progress, ch.classId) : body.progress;
+      if (body.progress) {
+        const vip = !!ch.vipUntil && Date.now() < ch.vipUntil;
+        ch.progress = progressLib ? progressLib.normalize(body.progress, ch.classId) : body.progress;
+        ch.progress.vip = vip;
+      }
       saveDb();
       return send(res, 200, { character: ch });
     }
-    if (m === 'GET') return send(res, 200, { character: ch });
+    if (m === 'GET') {
+      refreshVip(ch);
+      return send(res, 200, { character: ch });
+    }
   }
 
   if (p === '/api/skills' && m === 'GET') {
@@ -300,6 +519,11 @@ async function handleApi(req, res, url) {
     db.skills = db.skills.filter((s) => s.id !== skillMatch[1]);
     saveDb();
     return send(res, 200, { ok: true });
+  }
+
+  if (p.startsWith('/api/admin/')) {
+    if (!requireAdmin(req, res)) return;
+    return handleAdmin(req, res, url);
   }
 
   return send(res, 404, { error: 'ไม่พบ API นี้' });

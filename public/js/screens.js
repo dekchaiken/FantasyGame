@@ -21,6 +21,8 @@ const TIPS = [
 ];
 
 let characters = [];
+let servers = [];
+let serverId = null;
 let selectedIdx = 0;
 let googleTried = false;
 
@@ -111,9 +113,29 @@ function showLogin() {
 }
 
 // ---------- character select ----------
+// Server picker: the server chosen last time when it is still listed, else the first open one.
+async function loadServers() {
+  servers = (await API.get('/api/servers')).servers;
+  const saved = localStorage.getItem('sr_server');
+  const pick = servers.find((s) => s.id === saved) || servers.find((s) => s.status === 'open') || servers[0];
+  serverId = pick ? pick.id : null;
+  $('server-select').innerHTML = servers.map((s) =>
+    `<option value="${s.id}" ${s.id === serverId ? 'selected' : ''}>${s.name} · ${s.status === 'open' ? 'เปิด' : s.status === 'maintenance' ? 'ปรับปรุง' : 'ปิด'} (${s.population})</option>`).join('');
+}
+
+async function loadAnnouncements() {
+  const { announcements } = await API.get('/api/announcements?server=' + encodeURIComponent(serverId || ''));
+  $('announce').hidden = !announcements.length;
+  $('announce').innerHTML = announcements.map((a) => `<div class="announce-item"><b>${escHtml(a.title)}</b><p>${escHtml(a.body)}</p></div>`).join('');
+}
+
+const escHtml = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
 async function showCharSelect() {
   try {
-    characters = (await API.get('/api/characters')).characters;
+    await loadServers();
+    loadAnnouncements().catch(() => {});
+    characters = (await API.get('/api/characters?server=' + encodeURIComponent(serverId || ''))).characters;
   } catch (e) {
     if (e.status === 401) return showLogin();
     $('charselect-error').textContent = e.message;
@@ -210,6 +232,7 @@ async function createCharacter() {
   if (name.length < 2) return creatorError('ชื่อต้องมีอย่างน้อย 2 ตัวอักษร');
   try {
     const data = await API.post('/api/characters', {
+      serverId,
       name,
       gender: cstate.gender,
       classId: cstate.classId,
@@ -269,6 +292,12 @@ async function boot() {
   $('btn-guest').addEventListener('click', guestLogin);
   $('btn-logout').addEventListener('click', logout);
   $('btn-start').addEventListener('click', () => characters[selectedIdx] && enterWorld(characters[selectedIdx]));
+  $('server-select').addEventListener('change', (e) => {
+    serverId = e.target.value;
+    localStorage.setItem('sr_server', serverId);
+    selectedIdx = 0;
+    showCharSelect();
+  });
   $('btn-delete-char').addEventListener('click', deleteSelected);
   $('btn-back-select').addEventListener('click', backToSelect);
   $('btn-new-char').addEventListener('click', () => (characters.length < MAX_CHARACTERS ? openCreator() : null));
