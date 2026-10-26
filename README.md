@@ -95,3 +95,11 @@ ADMIN_TOKEN=change-me node server.js
 ```
 
 The static build on Vercel has no server, so it runs one local world and no admin panel.
+
+## Game settings from the admin panel
+
+`/admin.html` has a **ตั้งค่าเกม** section. Every monster, map, dungeon, quest, NPC, class basics, the tower, and the global rates can be edited there as JSON.
+
+- Saved values are stored on the server and applied when a player loads the game; defaults live in `public/js/data.js` and `public/js/config.js`.
+- The server checks the shape against the default (a number stays a number, no unknown fields) and checks that quests, maps and dungeons only reference monsters, NPCs and items that exist.
+- "คืนค่าเดิม" removes the override and returns the shipped value.

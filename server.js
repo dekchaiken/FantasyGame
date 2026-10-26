@@ -40,6 +40,7 @@ function loadDb() {
 function migrateDb(d) {
   d.servers ||= [];
   d.announcements ||= [];
+  d.gameConfig ||= {};
   if (!d.servers.length) d.servers.push({ id: 's1', name: 'เซิร์ฟเวอร์ 1', status: 'open', createdAt: Date.now() });
   for (const c of d.characters || []) c.serverId ||= d.servers[0].id;
   return d;
@@ -151,7 +152,11 @@ const clampInt = (v, min, max, def) => {
 // Progress rules live in public/js/progress.js and are shared with the client, so the server
 // validates saves with exactly the same code. Loaded once at startup (the file is an ES module).
 let progressLib = null;
-const progressReady = import(path.join(__dirname, 'public', 'js', 'progress.js')).then((m) => { progressLib = m; });
+let configLib = null;
+const progressReady = Promise.all([
+  import(path.join(__dirname, 'public', 'js', 'progress.js')),
+  import(path.join(__dirname, 'public', 'js', 'config-apply.js')),
+]).then(([p, c]) => { progressLib = p; configLib = c; });
 
 // Keep in sync with public/js/config.js (OPTIONS and DEFAULT_APPEARANCE).
 function sanitizeAppearance(a = {}) {
@@ -222,6 +227,40 @@ async function verifyGoogleCredential(credential) {
 async function handleAdmin(req, res, url) {
   const p = url.pathname;
   const m = req.method;
+
+  if (p === '/api/admin/game-config' && m === 'GET') {
+    if (!configLib) return send(res, 503, { error: 'ระบบตั้งค่ายังไม่พร้อม' });
+    const categories = configLib.CATEGORIES.map((c) => ({
+      id: c.id, label: c.label, single: !!c.single,
+      defaults: configLib.defaultsOf(c.id),
+      overrides: db.gameConfig[c.id] || {},
+    }));
+    return send(res, 200, { categories });
+  }
+
+  const cfgMatch = p.match(/^\/api\/admin\/game-config\/(\w+)\/([\w-]+)$/);
+  if (cfgMatch && (m === 'PUT' || m === 'DELETE')) {
+    if (!configLib) return send(res, 503, { error: 'ระบบตั้งค่ายังไม่พร้อม' });
+    const [, cat, key] = cfgMatch;
+    const category = configLib.categoryById(cat);
+    if (!category) return send(res, 404, { error: 'ไม่มีหมวดนี้' });
+    const defaults = configLib.defaultsOf(cat);
+    if (!(key in defaults)) return send(res, 404, { error: `ไม่มี "${key}" ในหมวดนี้` });
+    if (m === 'DELETE') {
+      if (db.gameConfig[cat]) delete db.gameConfig[cat][key];
+      saveDb();
+      return send(res, 200, { ok: true, value: defaults[key] });
+    }
+    const body = await readBody(req);
+    const value = body.value;
+    const errors = configLib.validateValue(defaults[key], value, key);
+    if (!errors.length) errors.push(...configLib.checkReferences(cat, key, value));
+    if (errors.length) return send(res, 400, { error: errors.slice(0, 8).join(' · ') });
+    db.gameConfig[cat] = db.gameConfig[cat] || {};
+    db.gameConfig[cat][key] = value;
+    saveDb();
+    return send(res, 200, { ok: true, value });
+  }
 
   if (p === '/api/admin/overview' && m === 'GET') {
     return send(res, 200, {
@@ -410,6 +449,11 @@ async function handleApi(req, res, url) {
     const user = requireUser(req, res);
     if (!user) return;
     return send(res, 200, { user: publicUser(user) });
+  }
+
+  // The game applies these overrides on top of its defaults when it starts.
+  if (p === '/api/game-config' && m === 'GET') {
+    return send(res, 200, { overrides: db.gameConfig });
   }
 
   if (p === '/api/servers' && m === 'GET') {

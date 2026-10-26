@@ -34,6 +34,14 @@
     .maintenance { background: #fff4e0; color: #b7770e; }
     .closed { background: #ffecef; color: var(--bad); }
     .muted { color: var(--muted); font-size: 12px; }
+    .cfg-grid { display: grid; grid-template-columns: 260px 1fr; gap: 14px; }
+    .cfg-keys { list-style: none; margin: 0; padding: 0; max-height: 520px; overflow-y: auto; border: 1px solid var(--line); border-radius: 12px; }
+    .cfg-keys li { padding: 8px 10px; border-bottom: 1px solid var(--line); cursor: pointer; font-size: 13px; display: flex; justify-content: space-between; gap: 6px; }
+    .cfg-keys li:hover { background: #f3f7ff; }
+    .cfg-keys li.on { background: #eaf4ff; font-weight: 600; }
+    .cfg-keys .badge { font-size: 11px; color: #9b5cff; }
+    textarea.code { font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px; min-height: 420px; }
+    @media (max-width: 720px) { .cfg-grid { grid-template-columns: 1fr; } }
     #msg { min-height: 20px; font-size: 13px; }
     #msg.err { color: var(--bad); }
     #msg.ok { color: var(--ok); }
@@ -78,6 +86,26 @@
     </section>
 
     <section class="card">
+      <h2>ตั้งค่าเกม (ทุกรายละเอียด)</h2>
+      <p class="muted">แก้ค่าของแต่ละรายการเป็น JSON ค่าที่บันทึกจะมีผลเมื่อผู้เล่นเข้าเกมครั้งถัดไป ระบบตรวจรูปแบบและอ้างอิงให้อัตโนมัติ คืนค่าเดิมได้ทุกเมื่อ</p>
+      <div class="row" style="margin-bottom:10px">
+        <select id="cfg-cat"></select>
+        <input id="cfg-q" placeholder="ค้นหารายการ" size="20">
+      </div>
+      <div class="cfg-grid">
+        <ul class="cfg-keys" id="cfg-keys"></ul>
+        <div>
+          <textarea class="code" id="cfg-json" spellcheck="false"></textarea>
+          <div class="row" style="margin-top:8px">
+            <button class="primary" id="cfg-save">บันทึก</button>
+            <button id="cfg-reset">คืนค่าเดิม</button>
+            <span class="muted" id="cfg-state"></span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
       <h2>ประกาศ (แสดงในเกม)</h2>
       <div class="row" style="margin-bottom:8px">
         <input id="ann-title" placeholder="หัวข้อ" size="30">
@@ -100,6 +128,8 @@
     const CLASS_TH = { swordsman: 'นักดาบ', assassin: 'นักฆ่า', mage: 'นักเวทย์', priest: 'นักพรต' };
     let token = sessionStorage.getItem('sr_admin_token') || '';
     let servers = [];
+    let cfgCats = [];
+    let cfgCur = null;
 
     const msg = (text, cls = '') => { $('msg').textContent = text; $('msg').className = cls; };
 
@@ -144,7 +174,58 @@
       $('ann-server').innerHTML = '<option value="">ทุกเซิร์ฟเวอร์</option>' + opts;
       await loadCharacters();
       await loadAnnouncements();
+      await loadConfig();
     }
+
+    // Game settings: one category at a time, one entry at a time, edited as JSON
+    async function loadConfig() {
+      const { categories } = await api('GET', '/api/admin/game-config');
+      cfgCats = categories;
+      const keep = $('cfg-cat').value;
+      $('cfg-cat').innerHTML = categories.map((c) => `<option value="${c.id}">${esc(c.label)}</option>`).join('');
+      if (keep) $('cfg-cat').value = keep;
+      renderConfigKeys();
+    }
+
+    function renderConfigKeys() {
+      const c = cfgCats.find((x) => x.id === $('cfg-cat').value);
+      if (!c) return;
+      const q = $('cfg-q').value.trim().toLowerCase();
+      const keys = Object.keys(c.defaults).filter((k) => !q || k.toLowerCase().includes(q));
+      $('cfg-keys').innerHTML = keys.map((k) => `<li data-key="${esc(k)}" class="${cfgCur && cfgCur.key === k ? 'on' : ''}">
+        <span>${esc(k)}</span>${c.overrides[k] !== undefined ? '<span class="badge">แก้แล้ว</span>' : ''}</li>`).join('') || '<li class="muted">ไม่พบรายการ</li>';
+      if (cfgCur && cfgCur.cat === c.id) showConfigEntry(cfgCur.key);
+    }
+
+    function showConfigEntry(key) {
+      const c = cfgCats.find((x) => x.id === $('cfg-cat').value);
+      if (!c) return;
+      cfgCur = { cat: c.id, key };
+      const value = c.overrides[key] !== undefined ? c.overrides[key] : c.defaults[key];
+      $('cfg-json').value = JSON.stringify(value, null, 2);
+      $('cfg-state').textContent = `${key} · ${c.overrides[key] !== undefined ? 'กำลังใช้ค่าที่แก้' : 'ใช้ค่าเริ่มต้น'}`;
+      document.querySelectorAll('#cfg-keys li').forEach((li) => li.classList.toggle('on', li.dataset.key === key));
+    }
+
+    $('cfg-cat').addEventListener('change', () => { cfgCur = null; renderConfigKeys(); });
+    $('cfg-q').addEventListener('input', renderConfigKeys);
+    $('cfg-keys').addEventListener('click', (e) => {
+      const li = e.target.closest('li[data-key]');
+      if (li) showConfigEntry(li.dataset.key);
+    });
+    $('cfg-save').addEventListener('click', () => run(async () => {
+      if (!cfgCur) throw new Error('เลือกรายการก่อน');
+      let value;
+      try { value = JSON.parse($('cfg-json').value); } catch { throw new Error('JSON ไม่ถูกต้อง ตรวจเครื่องหมายคำพูด , และ ]'); }
+      await api('PUT', `/api/admin/game-config/${cfgCur.cat}/${encodeURIComponent(cfgCur.key)}`, { value });
+      await loadConfig();
+    }, 'บันทึกการตั้งค่าแล้ว'));
+    $('cfg-reset').addEventListener('click', () => run(async () => {
+      if (!cfgCur) throw new Error('เลือกรายการก่อน');
+      if (!confirm('คืนค่าเดิมของรายการนี้?')) return;
+      await api('DELETE', `/api/admin/game-config/${cfgCur.cat}/${encodeURIComponent(cfgCur.key)}`);
+      await loadConfig();
+    }, 'คืนค่าเดิมแล้ว'));
 
     async function loadCharacters() {
       const q = encodeURIComponent($('char-q').value.trim());

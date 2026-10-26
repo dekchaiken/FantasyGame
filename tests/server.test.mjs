@@ -122,3 +122,23 @@ test('announcements: an admin posts one, the game shows it for its server only',
   await admin('PATCH', `/api/admin/announcements/${a.data.announcement.id}`, { active: false });
   assert.equal((await api('GET', '/api/announcements?server=s1')).data.announcements.length, 1);
 });
+
+test('game config: the admin edits an entry, bad values are refused, the public copy shows it', async () => {
+  const list = await admin('GET', '/api/admin/game-config');
+  assert.equal(list.status, 200);
+  const monsters = list.data.categories.find((c) => c.id === 'monsters');
+  assert.ok(monsters.defaults.slime);
+  const good = { ...monsters.defaults.slime, hp: 77 };
+  assert.equal((await admin('PUT', '/api/admin/game-config/monsters/slime', { value: good })).status, 200);
+  const pub = await api('GET', '/api/game-config');
+  assert.equal(pub.data.overrides.monsters.slime.hp, 77);
+  const bad = await admin('PUT', '/api/admin/game-config/monsters/slime', { value: { ...good, hp: 'lots' } });
+  assert.equal(bad.status, 400);
+  const badRef = await admin('PUT', '/api/admin/game-config/quests/camp_1', { value: { ...DATA_QUEST_STUB, steps: [{ type: 'talk', npc: 'ghost' }] } });
+  assert.equal(badRef.status, 400);
+  assert.equal((await admin('DELETE', '/api/admin/game-config/monsters/slime')).status, 200);
+  assert.equal((await api('GET', '/api/game-config')).data.overrides.monsters?.slime, undefined);
+  assert.equal((await api('PUT', '/api/admin/game-config/monsters/slime', { value: good })).status, 401);
+});
+
+const DATA_QUEST_STUB = { title: 'x', giver: 'scout', minLevel: 1, steps: [], reward: { exp: 1, gold: 1 } };

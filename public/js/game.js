@@ -10,7 +10,7 @@ import { API } from './api.js';
 import { CLASSES } from './config.js';
 import { JOB_NAMES } from './skills.js';
 import { Sfx } from './sfx.js';
-import { MAPS, PORTALS, NPCS, MONSTERS, QUESTS, MATERIALS, GEAR, RARITY, GRADES, DUNGEONS, TOWER } from './data.js';
+import { MAPS, PORTALS, NPCS, MONSTERS, QUESTS, MATERIALS, GEAR, RARITY, GRADES, DUNGEONS, TOWER, RATES } from './data.js';
 import * as DG from './dungeon.js';
 import { SPIRIT_RARITY } from './data.js';
 import { SKILL_BY_ID, rankMult, rankCooldown } from './skills.js';
@@ -25,10 +25,8 @@ const NPC_RANGE = 2.6;
 const SAVE_EVERY = 6;
 const PORTAL_RANGE = 1.3;
 const PORTAL_COLOR = { town: '#ffd166', forest: '#5ee7ff', meadow: '#9be36b', mine: '#ff6a3d', ruin: '#c58bff', herbfield: '#7fd16a', mountain: '#b8c4cc', camp: '#d9a45c', city: '#c9bfe6', sky: '#9fd8ff' };
-const NODE_RESPAWN = 25; // seconds before a harvested gathering node comes back
 const NODE_COLOR = { herb: '#7fe05a', essence: '#7dd3ff', crystal_ore: '#ffd166' };
 const SHIELD_TIME = 5;
-const DROP_SCALE = 0.55; // monsters drop about half as often as their table says
 const FX_BASIC_DEFAULT = {
   swordsman: { type: 'slash', color: '#ffd166', color2: '#ffffff', count: 1, size: 70, duration: 240, speed: 0, shake: 1 },
   assassin: { type: 'slash', color: '#9b8cff', color2: '#ffffff', count: 1, size: 60, duration: 180, speed: 0, shake: 1 },
@@ -733,13 +731,13 @@ export const Game = {
     const items = [];
     const msgs = [];
     for (const [id, chance] of d.drops) {
-      if (Math.random() < chance * DROP_SCALE) {
+      if (Math.random() < chance * RATES.dropScale) {
         P.addMat(this.p, id, 1);
         items.push({ name: MATERIALS[id].name, icon: MATERIALS[id].icon, color: RARITY[MATERIALS[id].rarity].color });
         msgs.push(...P.applyEvent(this.p, { type: 'collect', item: id, qty: 1 }, this.character.classId));
       }
     }
-    if (Math.random() < d.gearChance * DROP_SCALE) {
+    if (Math.random() < d.gearChance * RATES.dropScale) {
       const gear = P.rollDrop(this.character.classId, this.p.level);
       if (P.addGear(this.p, gear)) {
         const base = GEAR[gear.base];
@@ -1275,7 +1273,7 @@ export const Game = {
     P.addMat(this.p, node.item, n);
     const exp = 8 + this.p.level * 2;
     node.ready = false;
-    node.t = NODE_RESPAWN;
+    node.t = RATES.nodeRespawn;
     node.mesh.visible = false;
     this.floatText(node.x, 1.2, node.z, `+${n} ${mat.name}`, '#8fe39a', true);
     if (P.addExp(this.p, exp)) { this.refreshStats(true); Hud.toast(`เลเวลอัป! ตอนนี้เลเวล ${this.p.level}`, 'gold'); }

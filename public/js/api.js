@@ -1,4 +1,5 @@
 import { CLASSES } from './config.js';
+import { applyGameConfig } from './config-apply.js';
 import { SAVE_VERSION, normalize } from './progress.js';
 
 // Talks to server.js when it is running. When there is no API (static hosting such as Vercel),
@@ -127,6 +128,11 @@ export const API = {
       const r = await fetch('/api/config', { cache: 'no-store' });
       if (!r.ok || !(r.headers.get('content-type') || '').includes('json')) throw new Error('no api');
       this.config = await r.json();
+      // balance and content overrides from the admin panel
+      try {
+        const g = await fetch('/api/game-config', { cache: 'no-store' });
+        if (g.ok) applyGameConfig((await g.json()).overrides);
+      } catch { /* defaults stay in place */ }
     } catch {
       this.local = true;
       this.config = localHandle('GET', new URL('/api/config', location.origin), undefined, null);

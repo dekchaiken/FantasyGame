@@ -291,6 +291,9 @@ export const MAPS = {
   dungeon: { name: 'ดันเจี้ยน', levelText: '', minLevel: 1, size: 36, biome: 'dungeon', sky: '#2a2440', spawns: [], hidden: true },
 };
 
+// Global rates. Edited from the admin panel.
+export const RATES = { dropScale: 0.55, nodeRespawn: 25 };
+
 // Farm dungeons: fixed waves, a daily entry limit, and a reward roll at the end.
 // loot: [itemId, chance, count]. runeChance: chance of one rune of tier 1-2.
 export const DUNGEONS = {
