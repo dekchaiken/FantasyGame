@@ -1,7 +1,8 @@
 import { icon } from './icons.js';
 import { CLASSES, HUD_MENUS } from './config.js';
-import { MAPS, NPCS, QUESTS, MATERIALS, GEAR, RARITY } from './data.js';
-import { SKILL_TREE, TIER_LEVEL, MAX_RANK } from './skills.js';
+import { MAPS, NPCS, QUESTS, MATERIALS, GEAR, RARITY, MAX_ENH, ENH_DOWN_FROM } from './data.js';
+import { SKILL_TREE, TIER_LEVEL, MAX_RANK, rankMult, rankCooldown } from './skills.js';
+import { Sfx } from './sfx.js';
 import * as P from './progress.js';
 import { drawThumb } from './thumb.js';
 
@@ -48,7 +49,12 @@ export const Hud = {
       if (!el || !this.g) return;
       const d = el.dataset;
       const g = this.g;
+      if (d.act !== 'enh-do') Sfx.play('click');
       switch (d.act) {
+        case 'sfx': Sfx.setMuted(!Sfx.muted); this.refresh(g); break;
+        case 'sk-sel': this.windowData.sk = d.id; this.refresh(g); break;
+        case 'enh-open': this.open('enhance', { uid: d.uid }); this.refresh(g); break;
+        case 'enh-do': this.enhanceFrom(g, d.uid); break;
         case 'menu': this.toggle(d.menu); break;
         case 'close': this.close(); break;
         case 'auto': g.setAuto(!g.auto); break;
@@ -59,9 +65,13 @@ export const Hud = {
         case 'select': this.windowData.sel = d.uid; this.refresh(g); break;
         case 'craft': g.craft(d.line, Number(d.band)); break;
         case 'unequip': g.unequip(d.slot); break;
-        case 'enhance': g.enhance(d.uid); break;
         case 'sell': g.sell(d.uid); break;
-        case 'learn': g.learn(d.id); break;
+        case 'learn': {
+          const was = g.p.skills[d.id] || 0;
+          g.learn(d.id);
+          Sfx.play((g.p.skills[d.id] || 0) > was ? 'learn' : 'error');
+          break;
+        }
         case 'hot': g.setHotbar(Number(d.slot), d.id || null); break;
         case 'use': g.usePotion(d.id); break;
         case 'buy': g.buy(d.id); break;
@@ -82,6 +92,21 @@ export const Hud = {
   },
 
   // ---------- windows ----------
+  // Runs one enhancement attempt from the enhancement screen and plays its result animation and sound.
+  enhanceFrom(g, uid) {
+    const r = g.enhance(uid);
+    const item = P.findGear(g.p, uid);
+    Sfx.play(FX_SOUND[r.result] || 'error', item ? item.enh : 0);
+    if (this.windowKind === 'enhance') {
+      this.windowData.fx = { result: r.result, n: Date.now() };
+      this.refresh(g);
+      clearTimeout(this.fxTimer);
+      this.fxTimer = setTimeout(() => {
+        if (this.windowKind === 'enhance') { this.windowData.fx = null; this.refresh(g); }
+      }, 1400);
+    }
+  },
+
   toggle(kind) {
     if (this.windowKind === kind) this.close();
     else this.open(kind);
@@ -92,7 +117,7 @@ export const Hud = {
     this.windowData = { tab: 'active', ...data };
     this.windowHtml = '';
     $('window').hidden = false;
-    $('window').classList.toggle('wide', kind === 'skills' || kind === 'inventory');
+    $('window').classList.toggle('wide', kind === 'skills' || kind === 'inventory' || kind === 'enhance');
     this.refresh(this.g);
   },
 
@@ -118,7 +143,8 @@ export const Hud = {
     let html = '';
 
     if (kind === 'inventory') html = bagHtml(g, this);
-    else if (kind === 'skills') html = skillsHtml(g);
+    else if (kind === 'skills') html = skillsHtml(g, this.windowData);
+    else if (kind === 'enhance') html = enhHtml(g, this.windowData);
     else if (kind === 'quests') html = questsHtml(g, this);
     else if (kind === 'map') html = mapHtml(g);
     else if (kind === 'status') html = statusHtml(g);
@@ -437,17 +463,13 @@ function gearDetail(g, item) {
   const eq = GEAR_SLOTS_EQUIPPED(p, item.uid);
   const allowed = base.slot !== 'weapon' || base.classId === g.character.classId;
   const lvOk = p.level >= base.level;
-  const cost = P.enhCost(item.enh);
-  const stones = P.enhStones(item.enh);
-  const rate = Math.round(enhRate(item.enh) * 100);
   const stats = base.atk ? `พลังโจมตี ${base.atk}` : `ป้องกัน ${base.def} · HP ${base.hp}`;
   const btns = [];
   if (eq) btns.push(`<button class="btn-ghost sm" data-act="unequip" data-slot="${base.slot}">ถอด</button>`);
   else if (allowed) btns.push(`<button class="btn-primary sm" data-act="equip" data-uid="${item.uid}" ${lvOk ? '' : 'disabled'}>${lvOk ? 'ใส่' : `ต้องเลเวล ${base.level}`}</button>`);
   if (!eq) btns.push(`<button class="btn-ghost sm" data-act="sell" data-uid="${item.uid}">ขาย</button>`);
-  const enh = item.enh >= 15 ? '<small>ตีบวกถึงขีดสุด</small>'
-    : `<div class="enh-line"><span>ตีบวก +${item.enh + 1} · โอกาส ${rate}%</span><span>${icon('coin')} ${fmt(cost)} · ${icon('gem')} ${stones} (มี ${p.mats.enh_stone || 0})</span>
-      <button class="btn-primary sm" data-act="enhance" data-uid="${item.uid}">ตีบวก</button></div>`;
+  const enh = `<div class="enh-line"><span>ตีบวก +${item.enh}${item.enh >= MAX_ENH ? ' (สูงสุด)' : ''}</span>
+      ${item.enh >= MAX_ENH ? '' : `<button class="btn-primary sm" data-act="enh-open" data-uid="${item.uid}">ไปหน้าตีบวก</button>`}</div>`;
   return `<div class="detail-head"><span class="di" style="color:${base.gcolor}">${icon(base.icon)}</span>
       <div><b>${gearLabel(item)}</b><small>${SLOT_LABEL[base.slot] || 'อาวุธ'} · ${GRADES_NAME(base.grade)} · ต้องเลเวล ${base.level} · ${stats}${base.classId ? ' · ' + (base.classId === g.character.classId ? 'สายของคุณ' : 'ของสายอาชีพอื่น') : ''}</small>
       <ul class="opts">${optionsHtml(item)}</ul></div></div>
@@ -488,44 +510,6 @@ const BANDS_LIST = [
 ];
 const BANDS_NAMES_RE = /(ฝึกหัด|ชำนาญ|นักรบ|วีรบุรุษ|ราชา|เทพ)$/;
 
-function skillsHtml(g) {
-  const p = g.p;
-  const cls = g.character.classId;
-  const pts = P.skillPoints(p);
-  let html = `<div class="row-meta"><span>แต้มสกิลคงเหลือ <b class="pts">${pts}</b></span><span>+${2} แต้มต่อเลเวล</span></div>`;
-  html += '<div class="sub-title">ช่องปุ่มลัด (กด 1-6)</div><div class="hotbar-edit">';
-  for (let slot = 1; slot <= 6; slot++) {
-    const id = p.hotbar[slot - 1];
-    const s = id && g.skillMap[id];
-    html += `<div class="hb-slot${s ? '' : ' empty'}"><kbd>${slot}</kbd>${s ? icon(s.icon) : ''}<span>${s ? esc(s.name) : 'ว่าง'}</span>${s ? `<button class="x" data-act="hot" data-slot="${slot}" data-id="" aria-label="เอาออก">✕</button>` : ''}</div>`;
-  }
-  html += '</div>';
-  for (const line of SKILL_TREE[cls] || []) {
-    html += `<div class="sub-title">${esc(line.name)}</div><div class="tree">`;
-    for (const sk of line.tiers) {
-      const rank = p.skills[sk.id] || 0;
-      const reason = P.canLearn(p, sk.id);
-      html += `<div class="sk-card${rank ? ' learned' : ''}${reason && !rank ? ' locked' : ''}">
-        <div class="sk-top"><div class="sk-badge">${icon(sk.icon)}</div>
-          <div><b>${esc(sk.name)}</b><small>ขั้น ${sk.tier} · Lv ${TIER_LEVEL[sk.tier - 1]}</small></div>
-          <span class="rank">${rank}/${MAX_RANK}</span></div>
-        <small class="sk-desc">${skillDesc(sk)}</small>
-        ${rank ? `<div class="hot-btns">${[1, 2, 3, 4, 5, 6].map((n) => `<button class="${p.hotbar[n - 1] === sk.id ? 'on' : ''}" data-act="hot" data-slot="${n}" data-id="${sk.id}">${n}</button>`).join('')}</div>` : ''}
-        ${rank < MAX_RANK ? (reason ? `<small class="lock-note">${esc(reason)}</small>` : `<button class="btn-primary sm" data-act="learn" data-id="${sk.id}">${rank ? 'เพิ่มระดับ' : 'เรียนรู้'}</button>`) : ''}
-      </div>`;
-    }
-    html += '</div>';
-  }
-  const custom = Object.values(g.skillMap).filter((s) => s.line === 'custom');
-  if (custom.length) {
-    html += '<div class="sub-title">สกิลกำหนดเอง</div><div class="tree">' + custom.map((sk) => {
-      const rank = p.skills[sk.id] || 0;
-      return `<div class="sk-card${rank ? ' learned' : ''}"><div class="sk-top"><div class="sk-badge">${icon(sk.icon)}</div><div><b>${esc(sk.name)}</b><small>สร้างจาก Skill Lab</small></div><span class="rank">${rank}/${MAX_RANK}</span></div>
-      ${rank ? `<div class="hot-btns">${[1, 2, 3, 4, 5, 6].map((n) => `<button class="${p.hotbar[n - 1] === sk.id ? 'on' : ''}" data-act="hot" data-slot="${n}" data-id="${sk.id}">${n}</button>`).join('')}</div>` : `<button class="btn-primary sm" data-act="learn" data-id="${sk.id}">เรียนรู้</button>`}</div>`;
-    }).join('') + '</div>';
-  }
-  return html;
-}
 
 function skillDesc(sk) {
   const bits = [];
@@ -609,4 +593,149 @@ function setBar(id, ratio) {
 
 function statRow(label, value) {
   return `<div class="stat"><span>${label}</span><b>${typeof value === 'number' ? fmt(value) : value}</b></div>`;
+}
+
+// ---------- skill board: a grid of lines (columns) x tiers (rows), with a detail panel ----------
+const LINE_COLORS = ['#ff7a9c', '#4aa8ff', '#34c79a', '#ffb020', '#a58bff'];
+const sfxBtn = () => `<button class="sfx-btn" data-act="sfx" aria-label="เสียง">${icon(Sfx.muted ? 'mute' : 'sound')}</button>`;
+
+function skillsHtml(g, w) {
+  const p = g.p;
+  const cls = g.character.classId;
+  const cols = (SKILL_TREE[cls] || []).map((line, i) => ({ name: line.name, color: LINE_COLORS[i], tiers: line.tiers }));
+  const custom = Object.values(g.skillMap).filter((s) => s.line === 'custom');
+  if (custom.length) cols.push({ name: 'สกิลกำหนดเอง', color: LINE_COLORS[4], tiers: custom });
+  const all = cols.flatMap((c) => c.tiers);
+  const selId = w.sk && g.skillMap[w.sk] ? w.sk : all[0]?.id;
+  const selCol = cols.find((c) => c.tiers.some((s) => s.id === selId));
+
+  const node = (sk, color) => {
+    const rank = p.skills[sk.id] || 0;
+    const locked = !rank && P.canLearn(p, sk.id);
+    const cls2 = ['sk-node', rank ? 'learned' : '', locked ? 'locked' : '', sk.id === selId ? 'sel' : ''].join(' ');
+    return `<button class="${cls2}" style="--lc:${color};--pct:${(rank / MAX_RANK) * 100}%" data-act="sk-sel" data-id="${sk.id}">
+      <span class="sk-orb">${icon(sk.icon)}<em>${rank}/${MAX_RANK}</em></span>
+      <span class="sk-nm">${esc(sk.name)}</span>
+      <span class="sk-lv">${sk.tier ? `ขั้น ${sk.tier} · Lv ${TIER_LEVEL[sk.tier - 1]}` : 'กำหนดเอง'}</span></button>`;
+  };
+  const board = cols.map((c) => `<div class="sk-col" style="--lc:${c.color}">
+      <div class="sk-col-head"><b>${esc(c.name)}</b><small>${c.tiers.length} ขั้น</small></div>
+      ${c.tiers.map((sk, i) => node(sk, c.color) + (i < c.tiers.length - 1 ? '<div class="sk-link"></div>' : '')).join('')}
+    </div>`).join('');
+
+  const slots = [1, 2, 3, 4, 5, 6].map((n) => {
+    const s = p.hotbar[n - 1] && g.skillMap[p.hotbar[n - 1]];
+    return `<button class="sk-slot${s ? '' : ' empty'}" data-act="hot" data-slot="${n}" data-id="" title="${s ? 'เอาออก' : 'ว่าง'}">
+      <kbd>${n}</kbd>${s ? icon(s.icon) : '<i></i>'}<span>${s ? esc(s.name) : 'ว่าง'}</span></button>`;
+  }).join('');
+
+  const detail = selId ? skillDetail(g, g.skillMap[selId], selCol?.color || LINE_COLORS[0]) : '<div class="empty">ไม่มีสกิล</div>';
+  return `<div class="sk-bar">
+      <div class="sk-points"><span>แต้มสกิล</span><b>${P.skillPoints(p)}</b><small>+${2} ต่อเลเวล</small></div>
+      <div class="sk-hotbar">${slots}</div>${sfxBtn()}
+    </div>
+    <div class="sk-board">${board}</div>
+    <div class="sk-detail" style="--lc:${selCol?.color || LINE_COLORS[0]}">${detail}</div>`;
+}
+
+// What a skill does with the hero's current stats, plus the rank-up table.
+function skillDetail(g, sk, color) {
+  const p = g.p;
+  const rank = p.skills[sk.id] || 0;
+  const st = g.stats;
+  const kind = sk.heal ? 'ฮีลตัวเอง' : sk.shield ? 'ป้องกันตัวเอง' : 'โจมตี';
+  const target = sk.heal || sk.shield ? 'ตัวเอง' : sk.aoe ? 'ทุกเป้าในระยะ' : 'เป้าเดี่ยว';
+  const reason = rank ? null : P.canLearn(p, sk.id);
+  const dmg = (r) => Math.round(st.atk * rankMult(sk, r) * (1 + st.skillMg / 100));
+  const cd = (r) => (rankCooldown(sk, r, st.cdr) / 1000).toFixed(1);
+  const rows = [];
+  rows.push(['ประเภท', kind], ['เป้าหมาย', target]);
+  rows.push(['ใช้ MP', sk.mp], ['คูลดาวน์', `${cd(Math.max(1, rank))} วิ`]);
+  if (!sk.heal && !sk.shield) rows.push(['ระยะ', `${Math.round(sk.range / 40 * 10) / 10} ม.`]);
+  if (sk.heal) rows.push(['ฮีล', `${Math.round(sk.heal * 100)}% ของ HP สูงสุด (${fmt(Math.round(st.maxHp * sk.heal))})`]);
+  if (sk.shield) rows.push(['ลดความเสียหาย', `${Math.round(sk.shield * 100)}% นาน 5 วิ`]);
+  const table = sk.mult ? `<div class="sk-ranks">${[1, 2, 3].map((r) => `<div class="${r === rank ? 'cur' : ''}${r > rank + 1 ? ' future' : ''}">
+      <span>ระดับ ${r}</span><b>${fmt(dmg(r))} ดาเมจ</b><small>คูลดาวน์ ${cd(r)} วิ</small></div>`).join('')}</div>` : '';
+  const btn = rank < MAX_RANK
+    ? (reason ? `<small class="lock-note">${esc(reason)}</small>`
+      : `<button class="btn-primary" data-act="learn" data-id="${sk.id}">${rank ? `อัปเป็นระดับ ${rank + 1}` : 'เรียนรู้สกิลนี้'}</button>`)
+    : '<span class="tag">ระดับสูงสุดแล้ว</span>';
+  const hot = rank ? `<div class="sk-assign"><span>ตั้งปุ่มลัด</span>${[1, 2, 3, 4, 5, 6].map((n) => `<button class="${p.hotbar[n - 1] === sk.id ? 'on' : ''}" data-act="hot" data-slot="${n}" data-id="${sk.id}">${n}</button>`).join('')}</div>` : '';
+  return `<div class="sk-head">
+      <span class="sk-big" style="color:${color}">${icon(sk.icon)}</span>
+      <div><b>${esc(sk.name)}</b><small>${esc(sk.lineName || 'สกิลกำหนดเอง')} · ${sk.tier ? `ขั้น ${sk.tier} · ต้องเลเวล ${sk.reqLv}` : 'สร้างจาก Skill Lab'}</small>
+        <p>${esc(skillDesc(sk))}</p></div>
+      <div class="sk-rank"><b>${rank}</b><small>/${MAX_RANK}</small></div>
+    </div>
+    <div class="sk-grid2">
+      <div class="sk-facts">${rows.map(([k, v]) => `<div><span>${k}</span><b>${esc(v)}</b></div>`).join('')}</div>
+      <div class="sk-scale"><div class="sub-title">ค่าสเตตัสที่ใช้คำนวณ</div>
+        <div class="sk-stat"><span>ATK</span><b>${fmt(st.atk)}</b></div>
+        <div class="sk-stat"><span>สกิลดาเมจ</span><b>+${st.skillMg}%</b></div>
+        <div class="sk-stat"><span>ลดคูลดาวน์</span><b>${st.cdr}%</b></div>
+        <div class="sk-stat"><span>HP สูงสุด</span><b>${fmt(st.maxHp)}</b></div>
+      </div>
+    </div>
+    ${table}
+    <div class="sk-actions">${btn}</div>${hot}`;
+}
+
+// ---------- enhancement screen ----------
+const FX_TEXT = { success: 'สำเร็จ!', fail: 'ไม่สำเร็จ', down: 'ลดระดับ', error: '' };
+const FX_SOUND = { success: 'success', fail: 'fail', down: 'down', error: 'error' };
+
+function enhHtml(g, w) {
+  const p = g.p;
+  const item = P.findGear(p, w.uid);
+  if (!item) return '<div class="empty">ไม่พบไอเท็มนี้แล้ว</div><div class="sk-actions"><button class="btn-ghost" data-act="menu" data-menu="inventory">กลับกระเป๋า</button></div>';
+  const base = GEAR[item.base];
+  const max = item.enh >= MAX_ENH;
+  const cost = P.enhCost(item.enh);
+  const stones = P.enhStones(item.enh);
+  const have = p.mats.enh_stone || 0;
+  const rate = Math.round(enhRate(item.enh) * 100);
+  const canAfford = p.gold >= cost && have >= stones;
+  const pips = Array.from({ length: MAX_ENH }, (_, i) =>
+    `<i class="pip${i < item.enh ? ' on' : ''}${i === item.enh && !max ? ' next' : ''}${i >= ENH_DOWN_FROM ? ' risk' : ''}"></i>`).join('');
+  const fx = w.fx;
+  const sparks = Array.from({ length: 12 }, (_, i) => `<i class="spark" style="--a:${i * 30}deg"></i>`).join('');
+  const fxHtml = fx && FX_TEXT[fx.result]
+    ? `<div class="enh-fx ${fx.result}" data-n="${fx.n}">${fx.result === 'success' ? `<div class="ring"></div><div class="ring r2"></div>${sparks}` : ''}
+         <span>${FX_TEXT[fx.result]}${fx.result === 'success' ? ` +${item.enh}` : ''}</span></div>`
+    : '';
+  const stageCls = fx ? ` anim-${fx.result}` : '';
+  const btnLabel = max ? 'ตีบวกถึงขีดสุดแล้ว' : !canAfford ? (p.gold < cost ? 'เหรียญไม่พอ' : 'หินเสริมพลังไม่พอ') : 'ตีบวก';
+  const opts = item.opts.length ? item.opts.map((o) => `<li>${esc(P.optionLabel(o))}</li>`).join('') : '<li class="muted">ไม่มีออฟชั่นเสริม</li>';
+  const stat = base.atk ? `พลังโจมตี ${base.atk}` : `ป้องกัน ${base.def} · HP ${base.hp}`;
+
+  return `<div class="enh-wrap">
+    <div class="enh-left">
+      <div class="enh-stage${stageCls}" style="--gc:${base.gcolor}">
+        <div class="enh-aura"></div><div class="enh-aura a2"></div>
+        <div class="enh-item">${icon(base.icon)}</div>
+        ${fxHtml}
+      </div>
+      <div class="enh-level"><span>+${item.enh}</span>${max ? '' : `<i>→</i><span class="next">+${item.enh + 1}</span>`}</div>
+      <div class="enh-name"><b>${gearLabel(item)}</b><small>${GRADES_NAME(base.grade)} · ${stat}</small></div>
+      <ul class="opts">${opts}</ul>
+    </div>
+    <div class="enh-right">
+      <div class="enh-card">
+        <div class="enh-rate"><div><small>โอกาสสำเร็จ</small><b>${max ? '—' : rate + '%'}</b></div>
+          <div class="enh-bar"><span style="width:${max ? 100 : rate}%"></span></div></div>
+        <div class="enh-costs">
+          <div class="${p.gold < cost ? 'short' : ''}">${icon('coin')}<span>ค่าตีบวก</span><b>${fmt(cost)}</b></div>
+          <div class="${have < stones ? 'short' : ''}">${icon('gem')}<span>หินเสริมพลัง</span><b>${stones} <small>(มี ${have})</small></b></div>
+          <div>${icon('coin')}<span>เหรียญของคุณ</span><b>${fmt(p.gold)}</b></div>
+        </div>
+        <button class="enh-go${max || !canAfford ? ' off' : ''}" data-act="enh-do" data-uid="${item.uid}" ${max || !canAfford ? 'disabled' : ''}>${btnLabel}</button>
+        ${max ? '' : `<small class="enh-note">ตั้งแต่ +${ENH_DOWN_FROM} ขึ้นไป ถ้าล้มเหลวจะลดลง 1 ระดับ</small>`}
+      </div>
+      <div class="enh-ladder">${pips}</div>
+      <div class="enh-foot">
+        <button class="btn-ghost sm" data-act="menu" data-menu="inventory">${icon('back')} กลับกระเป๋า</button>
+        ${sfxBtn()}
+      </div>
+    </div>
+  </div>`;
 }

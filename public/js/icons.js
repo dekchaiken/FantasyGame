@@ -1,5 +1,9 @@
 // Inline SVG icon set (24x24, stroke based). No emoji anywhere in the UI.
 const P = {
+  sound: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 8.5a5 5 0 0 1 0 7M18.8 6a9 9 0 0 1 0 12"/>',
+  mute: '<path d="M4 9h4l5-4v14l-5-4H4z"/><path d="M16 9l5 6M21 9l-5 6"/>',
+  back: '<path d="M19 12H5M11 6l-6 6 6 6"/>',
+  arrowup: '<path d="M12 19V5M6 11l6-6 6 6"/>',
   sword: '<path d="M14 4h6v6L10 20l-4-1-1-4z"/><path d="M5 19l-2 2M8 16l-2 2"/>',
   dagger: '<path d="M12 3l3 9-3 3-3-3z"/><path d="M9 15h6M12 18v3"/>',
   staff: '<path d="M16 3v18"/><circle cx="16" cy="5" r="2.4"/>',
