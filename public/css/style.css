@@ -892,3 +892,31 @@ button, input, select { font: inherit; color: inherit; }
 .q-arrow-in { position: absolute; left: -20px; top: -175px; width: 40px; height: 40px; animation: q-bob 1s ease-in-out infinite; }
 .q-arrow-in svg { width: 40px; height: 40px; fill: var(--gold); stroke: #fff; stroke-width: 1.5; filter: drop-shadow(0 4px 6px rgba(40, 60, 120, 0.35)); }
 @keyframes q-bob { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+
+/* ---------- runes, passives and dungeons ---------- */
+.rune-box { display: flex; flex-direction: column; gap: 6px; padding: 10px; border-radius: 14px; background: #f5f8ff; border: 1px solid var(--line); }
+.rune-box .sub-title { margin: 0; }
+.rune-row { display: flex; gap: 8px; flex-wrap: wrap; }
+.rune-slot { display: flex; align-items: center; gap: 6px; padding: 8px 10px; min-width: 120px; border-radius: 12px; border: 1px dashed var(--line); background: #fff; color: var(--muted); cursor: pointer; font-size: 12px; }
+.rune-slot .ico { width: 16px; height: 16px; color: var(--muted); }
+.rune-slot:disabled { cursor: not-allowed; opacity: 0.6; }
+.rune-slot.filled { border: 2px solid var(--gc); color: var(--ink); background: linear-gradient(135deg, color-mix(in srgb, var(--gc) 22%, #fff), #fff); }
+.rune-slot.filled .ico { color: var(--gc); }
+.rune-bonus { color: var(--green); font-size: 12px; font-weight: 600; }
+
+.passive { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border-radius: 12px; background: #f3f6fc; border: 1px solid var(--line); }
+.passive b { font-size: 13px; }
+.passive small { color: var(--muted); font-size: 12px; }
+.passive em { font-style: normal; font-size: 11px; color: var(--muted); }
+.passive.on { border-color: rgba(20, 184, 124, 0.45); background: #effcf6; }
+.passive.on em { color: var(--green); font-weight: 600; }
+
+.dg-list { display: flex; flex-direction: column; gap: 8px; }
+.dg-card { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 14px; border-radius: 16px; background: #fff; border: 1px solid var(--line); }
+.dg-card.locked { opacity: 0.6; }
+.dg-card.tower { background: linear-gradient(120deg, #f2eaff, #fff); }
+.dg-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.dg-info b { font-size: 15px; }
+.dg-info small { color: var(--muted); font-size: 12px; line-height: 1.4; }
+.dg-meta { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.dg-meta span { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: #eef3ff; color: var(--ink); }

@@ -8,6 +8,24 @@ export const MAX_RANK = 3;
 // Job change: at JOB_LEVEL a hero picks one of its class's three lines as its job, once.
 // Tier 1 skills stay open to everyone. Tiers 2-4 of other lines are locked to other jobs.
 export const JOB_LEVEL = 20;
+// Passive skills: each job has two. The first is active from JOB_LEVEL, the second from PASSIVE2_LEVEL.
+// mods: atkPct / hpPct / mpPct are percentages; the rest use the same keys as gear affixes.
+export const PASSIVE2_LEVEL = 25;
+export const JOB_PASSIVES = {
+  guard: [{ name: 'ใจอัศวิน', desc: 'HP สูงสุด +12%', mods: { hpPct: 12 } }, { name: 'ป้อมปราการ', desc: 'ลดคูลดาวน์ +6%', mods: { cdr: 6 } }],
+  storm: [{ name: 'ลมคลั่ง', desc: 'ดาเมจสกิล +10%', mods: { skillmg: 10 } }, { name: 'คมพายุ', desc: 'คริติคอล +5%', mods: { crit: 5 } }],
+  light: [{ name: 'แสงนำทาง', desc: 'ATK +10%', mods: { atkPct: 10 } }, { name: 'พรแห่งแสง', desc: 'EXP +10%', mods: { exp: 10 } }],
+  shadow: [{ name: 'เงาหลบ', desc: 'คริติคอล +8%', mods: { crit: 8 } }, { name: 'ลอบสังหาร', desc: 'ดาเมจคริติคอล +20%', mods: { critdmg: 20 } }],
+  poison: [{ name: 'พิษสะสม', desc: 'ดาเมจสกิล +12%', mods: { skillmg: 12 } }, { name: 'ชีพจรพิษ', desc: 'MP สูงสุด +15%', mods: { mpPct: 15 } }],
+  wind: [{ name: 'ฝีเท้าลม', desc: 'ลดคูลดาวน์ +8%', mods: { cdr: 8 } }, { name: 'คมลมเวทย์', desc: 'ATK +12%', mods: { atkPct: 12 } }],
+  fire: [{ name: 'ไฟลุกโชน', desc: 'ดาเมจสกิล +14%', mods: { skillmg: 14 } }, { name: 'ร่างเพลิง', desc: 'ATK +8%', mods: { atkPct: 8 } }],
+  ice: [{ name: 'ความเย็นกัดกร่อน', desc: 'MP สูงสุด +20%', mods: { mpPct: 20 } }, { name: 'เกราะน้ำแข็ง', desc: 'HP สูงสุด +10%', mods: { hpPct: 10 } }],
+  thunder: [{ name: 'สายฟ้าสะท้อน', desc: 'คริติคอล +10%', mods: { crit: 10 } }, { name: 'พายุไฟฟ้า', desc: 'ดาเมจคริติคอล +25%', mods: { critdmg: 25 } }],
+  holy: [{ name: 'ศรัทธา', desc: 'HP สูงสุด +15%', mods: { hpPct: 15 } }, { name: 'ฟื้นฟูแห่งพระ', desc: 'ลดคูลดาวน์ +10%', mods: { cdr: 10 } }],
+  mend: [{ name: 'ฟื้นฟูต่อเนื่อง', desc: 'EXP +15%', mods: { exp: 15 } }, { name: 'มือทอง', desc: 'เหรียญ +20%', mods: { gold: 20 } }],
+  support: [{ name: 'ผู้นำทาง', desc: 'เหรียญ +15%', mods: { gold: 15 } }, { name: 'ผู้นำทัพ', desc: 'MP สูงสุด +10%', mods: { mpPct: 10 } }],
+};
+
 export const JOB_NAMES = {
   guard: 'อัศวินพิทักษ์', storm: 'นักรบพายุ', light: 'ดาบศักดิ์สิทธิ์',
   shadow: 'นักฆ่าเงา', poison: 'พิษาจารย์', wind: 'นินจาสายลม',

@@ -29,6 +29,30 @@ export const BANDS = [
   { level: 30, name: 'เทพ' },
 ];
 // Grades. weight = drop chance weight, opts = [min, max] random options, aura = glow colour.
+// Runes: socketed into gear for a stat bonus. One bag item per kind and tier (I-III).
+const RUNE_KINDS = {
+  atk: { name: 'รูนพลัง', values: [4, 8, 14], label: 'พลังโจมตี' },
+  hp: { name: 'รูนชีวิต', values: [30, 60, 100], label: 'HP' },
+  mp: { name: 'รูนปราณ', values: [15, 30, 50], label: 'MP' },
+  crit: { name: 'รูนจุดตาย', values: [2, 4, 7], label: 'คริติคอล %' },
+  critdmg: { name: 'รูนโทษสังหาร', values: [5, 10, 18], label: 'ดาเมจคริติคอล %' },
+  skillmg: { name: 'รูนเวทย์', values: [3, 6, 10], label: 'ดาเมจสกิล %' },
+  cdr: { name: 'รูนเวลา', values: [2, 4, 6], label: 'ลดคูลดาวน์ %' },
+  exp: { name: 'รูนปัญญา', values: [5, 10, 15], label: 'EXP %' },
+  gold: { name: 'รูนโชคลาภ', values: [5, 10, 15], label: 'เหรียญ %' },
+};
+const RUNE_TIER_NAME = ['I', 'II', 'III'];
+const RUNE_TIER_RARITY = ['common', 'rare', 'epic'];
+for (const [k, kind] of Object.entries(RUNE_KINDS)) {
+  kind.values.forEach((v, t) => {
+    MATERIALS[`rune_${k}_${t + 1}`] = {
+      name: `${kind.name} ${RUNE_TIER_NAME[t]}`, type: 'rune', rarity: RUNE_TIER_RARITY[t], icon: 'gem', price: 0,
+      cat: 'rune', rune: { k, v, label: kind.label },
+    };
+  });
+}
+export const RUNE_IDS = Object.keys(MATERIALS).filter((id) => MATERIALS[id].cat === 'rune');
+
 export const GRADES = [
   { name: 'ธรรมดา', color: '#7b8aa8', mult: 1, opts: [0, 1], aura: null, weight: 45, epithet: '' },
   { name: 'พื้นฐาน', color: '#35b87a', mult: 1.25, opts: [1, 1], aura: '#ffffff', weight: 25, epithet: 'อย่างดี' },
@@ -151,6 +175,11 @@ export const MONSTERS = {
     aggro: 7.5, range: 2.1, cd: 1.8, speed: 1.6, size: 1.6, shape: 'golem', color: '#ffd166',
     drops: [['crystal_ore', 0.9], ['potion_hp', 0.35], ['enh_stone', 0.5]], gearChance: 0.28,
   },
+  tower_boss: {
+    name: 'ผู้พิทักษ์หอคอย', level: 10, hp: 900, atk: 30, def: 12, exp: 300, gold: [60, 90], respawn: 9999,
+    aggro: 8, range: 2.4, cd: 1.6, speed: 1.8, size: 2.2, shape: 'golem', color: '#c084fc',
+    drops: [['crystal_ore', 1], ['enh_stone', 1]], gearChance: 1,
+  },
   golem: {
     name: 'โกเลมลาวา', level: 9, hp: 280, atk: 19, def: 9, exp: 110, gold: [18, 30], respawn: 24,
     aggro: 7, range: 2.0, cd: 2.0, speed: 1.4, size: 1.5, shape: 'golem', color: '#ff6a3d',
@@ -177,10 +206,44 @@ export const MAPS = {
     name: 'ซากปรักสวรรค์', levelText: 'เลเวล 20-30', minLevel: 20, size: 36, biome: 'ruin', sky: '#e8dcff',
     spawns: [['gold_golem', 6], ['frost_golem', 2]],
   },
+  dungeon: { name: 'ดันเจี้ยน', levelText: '', minLevel: 1, size: 36, biome: 'dungeon', sky: '#2a2440', spawns: [], hidden: true },
+};
+
+// Farm dungeons: fixed waves, a daily entry limit, and a reward roll at the end.
+// loot: [itemId, chance, count]. runeChance: chance of one rune of tier 1-2.
+export const DUNGEONS = {
+  gold_mine: {
+    name: 'ลานหินทอง', desc: 'ล่าโกเลมเพื่อเหรียญและหินเสริมพลัง', minLevel: 5, daily: 3,
+    waves: [[['slime', 4], ['wolf', 2]], [['golem', 3]], [['golem', 4], ['frost_golem', 1]]],
+    reward: { gold: [120, 200], exp: 400, loot: [['enh_stone', 0.8, 2], ['crystal_ore', 0.5, 1]], gearChance: 0.4 },
+  },
+  forge_vault: {
+    name: 'คลังช่างตีเหล็ก', desc: 'วัสดุอัปเกรดและหินเสริมพลังจำนวนมาก', minLevel: 10, daily: 3,
+    waves: [[['golem', 4]], [['frost_golem', 3]], [['frost_golem', 4], ['gold_golem', 1]]],
+    reward: { gold: [60, 100], exp: 500, loot: [['enh_stone', 1, 3], ['crystal_ore', 0.9, 2]], gearChance: 0.5 },
+  },
+  relic_cave: {
+    name: 'ถ้ำอาวุธโบราณ', desc: 'ของสวมใส่และอาวุธจากยุคเก่า', minLevel: 12, daily: 3,
+    waves: [[['wild_wolf', 4], ['fire_slime', 4]], [['frost_golem', 3]], [['gold_golem', 2]]],
+    reward: { gold: [80, 120], exp: 600, loot: [['wolf_fang', 0.9, 2]], gearChance: 1 },
+  },
+  rune_shrine: {
+    name: 'ศาลาหินรูน', desc: 'ศาลาโบราณที่ซ่อนรูนไว้ เข้าได้วันละ 2 ครั้ง', minLevel: 15, daily: 2,
+    waves: [[['frost_golem', 4]], [['gold_golem', 2], ['frost_golem', 2]]],
+    reward: { gold: [40, 80], exp: 500, loot: [], gearChance: 0.2, runeChance: 1 },
+  },
+};
+
+// Endless tower: one wave per floor, a boss every 10 floors. Each cleared floor pays out at once.
+export const TOWER = {
+  name: 'หอคอยแห่งสวรรค์', minLevel: 15, floors: 100,
+  desc: 'ขึ้นชั้นทีละชั้น บอสทุก 10 ชั้น ชั้นที่ผ่านแล้วได้รางวัลทันที',
+  dungeon: { name: 'ดันเจี้ยน', levelText: '', minLevel: 1, size: 36, biome: 'dungeon', sky: '#2a2440', spawns: [], hidden: true },
 };
 
 // Portals: walk into one to travel. `arrive` is where you appear on the destination map.
 export const PORTALS = {
+  dungeon: [{ x: 0, z: -16.5, to: 'town', arrive: [2, -12], label: 'ออกจากดันเจี้ยน' }],
   town: [{ x: 0, z: -17.5, to: 'forest', arrive: [0, -13], label: 'ป่าวิญญาณ' }],
   forest: [
     { x: 0, z: -16.5, to: 'town', arrive: [0, -14], label: 'ดินแดนสวรรค์' },
@@ -198,6 +261,11 @@ export const PORTALS = {
 };
 
 export const NPCS = {
+  dungeonmaster: {
+    name: 'ผู้คุมดันเจี้ยน เรนน่า', role: 'ผู้คุมดันเจี้ยน', map: 'town', pos: [-8, 4],
+    look: { gender: 'female', classId: 'priest', appearance: { hairStyle: 3, hair: '#2b2b44', top: { style: 2, color: '#ff6f9c' } } },
+    greet: 'ดันเจี้ยนเปิดแล้ว เข้าได้วันละจำนวนจำกัด หอคอยไม่มีวันปิด',
+  },
   elder: {
     name: 'ผู้อาวุโส อาเธอร์', role: 'ผู้ดูแลหมู่บ้าน', map: 'town', pos: [-4, 2],
     look: { gender: 'male', classId: 'priest', appearance: { hairStyle: 5, hair: '#f0f0f0', top: { style: 0, color: '#8a6cff' } } },

@@ -1,5 +1,5 @@
-import { MATERIALS, GEAR, AFFIXES, GRADES, BANDS, GEAR_SLOTS, CRAFT_WEIGHTS, ENH_RATE, MAX_ENH, ENH_DOWN_FROM, MAPS, QUESTS, ITEMS } from './data.js';
-import { SKILL_BY_ID, BUILTIN_SKILLS, MAX_RANK, skillsOfClass, SKILL_TREE, JOB_LEVEL, JOB_NAMES } from './skills.js';
+import { MATERIALS, GEAR, AFFIXES, GRADES, BANDS, GEAR_SLOTS, CRAFT_WEIGHTS, ENH_RATE, MAX_ENH, ENH_DOWN_FROM, MAPS, QUESTS, ITEMS, RUNE_IDS, DUNGEONS } from './data.js';
+import { SKILL_BY_ID, BUILTIN_SKILLS, MAX_RANK, skillsOfClass, SKILL_TREE, JOB_LEVEL, JOB_NAMES, JOB_PASSIVES, PASSIVE2_LEVEL } from './skills.js';
 
 // Pure progression rules (no DOM, no three.js), so they can be unit tested.
 // Save format v4: gear has level bands, six grades and seven equipment slots.
@@ -20,6 +20,7 @@ export function newProgress(classId = 'swordsman') {
     equip: Object.fromEntries(GEAR_SLOTS.map((s) => [s, null])),
     skills: {}, hotbar: [null, null, null, null, null, null],
     quests: {}, map: 'town', pos: null, job: null, vip: false,
+    dungeon: { daily: { key: '', counts: {} }, tower: 0 },
   };
   const first = skillsOfClass(classId).find((s) => s.tier === 1);
   if (first) {
@@ -39,7 +40,13 @@ function cleanGear(g) {
   const opts = Array.isArray(g.opts)
     ? g.opts.filter((o) => o && AFFIX_KEYS.includes(o.k) && Number.isFinite(o.v)).map((o) => ({ k: o.k, v: Math.round(o.v) })).slice(0, 4)
     : [];
-  return { uid: g.uid, base: g.base, enh: int(g.enh, 0, MAX_ENH, 0), opts };
+  const runes = (Array.isArray(g.runes) ? g.runes : []).filter((id) => RUNE_IDS.includes(id)).slice(0, runeSlots(GEAR[g.base]));
+  return { uid: g.uid, base: g.base, enh: int(g.enh, 0, MAX_ENH, 0), opts, runes };
+}
+
+// Rune sockets per gear piece: one at grade 0-1, two at 2-3, three at 4-5.
+export function runeSlots(base) {
+  return 1 + Math.floor(base.grade / 2);
 }
 
 // Repairs any input into a valid progress object. Unknown ids are dropped; older formats are migrated.
@@ -89,10 +96,11 @@ export function normalize(raw, classId = 'swordsman') {
     exp: int(p.exp, 0, 1e9, 0),
     gold: int(p.gold, 0, 1e9, 0),
     mats, gear, equip, skills, hotbar, quests,
-    map: MAPS[p.map] ? p.map : 'town',
+    map: MAPS[p.map] && !MAPS[p.map].hidden ? p.map : 'town',
     pos: validPos(p.pos),
     job: jobLinesOf(classId).includes(p.job) ? p.job : null,
     vip: p.vip === true,
+    dungeon: normalizeDungeon(p.dungeon),
   };
 }
 
@@ -125,8 +133,17 @@ function migrateV2(p, classId) {
 }
 
 // Derived combat stats from level, equipped gear (all slots) and gear options.
+// Passive skills of the hero's job that are active at its level.
+export function passivesOf(p) {
+  const list = p.job ? JOB_PASSIVES[p.job] || [] : [];
+  return list.map((ps, i) => ({ ...ps, unlocked: p.level >= (i === 0 ? JOB_LEVEL : PASSIVE2_LEVEL) }));
+}
+
 export function statsFor(p) {
-  const mods = { atk: 0, hp: 0, mp: 0, crit: 0, critdmg: 0, skillmg: 0, cdr: 0, exp: 0, gold: 0 };
+  const mods = { atk: 0, hp: 0, mp: 0, crit: 0, critdmg: 0, skillmg: 0, cdr: 0, exp: 0, gold: 0, atkPct: 0, hpPct: 0, mpPct: 0 };
+  for (const ps of passivesOf(p)) {
+    if (ps.unlocked) for (const [k, v] of Object.entries(ps.mods)) mods[k] += v;
+  }
   let wAtk = 0;
   let aDef = 0;
   let aHp = 0;
@@ -139,12 +156,16 @@ export function statsFor(p) {
     if (base.def) aDef += base.def * m;
     aHp += (base.hp || 0) * m;
     for (const o of g.opts) mods[o.k] = (mods[o.k] || 0) + o.v;
+    for (const id of g.runes || []) {
+      const r = MATERIALS[id]?.rune;
+      if (r) mods[r.k] += r.v;
+    }
   }
   return {
-    atk: Math.round(20 + p.level * 5 + wAtk + mods.atk),
+    atk: Math.round((20 + p.level * 5 + wAtk + mods.atk) * (1 + mods.atkPct / 100)),
     def: Math.round(4 + p.level * 2 + aDef),
-    maxHp: Math.round(180 + p.level * 40 + aHp + mods.hp),
-    maxMp: Math.round(80 + p.level * 15 + mods.mp),
+    maxHp: Math.round((180 + p.level * 40 + aHp + mods.hp) * (1 + mods.hpPct / 100)),
+    maxMp: Math.round((80 + p.level * 15 + mods.mp) * (1 + mods.mpPct / 100)),
     crit: 5 + mods.crit,
     critDmg: 50 + mods.critdmg,
     skillMg: mods.skillmg,
@@ -283,6 +304,7 @@ export function sellGear(p, uid) {
   const g = findGear(p, uid);
   if (!g || GEAR_SLOTS.some((s) => p.equip[s] === uid)) return null;
   const price = sellPrice(g);
+  for (const id of g.runes || []) addMat(p, id, 1);
   p.gear = p.gear.filter((x) => x !== g);
   p.gold += price;
   return price;
@@ -316,6 +338,19 @@ export function enhance(p, uid, rng = Math.random) {
     return { ok: false, result: 'down', msg: `ล้มเหลว ระดับลดเป็น +${g.enh}` };
   }
   return { ok: false, result: 'fail', msg: 'ตีบวกล้มเหลว (ไม่เสียระดับ)' };
+}
+
+// ---------- dungeon progress ----------
+function normalizeDungeon(d) {
+  const src = d && typeof d === 'object' ? d : {};
+  const counts = {};
+  for (const [id, n] of Object.entries(src.daily?.counts || {})) {
+    if (DUNGEONS[id] && Number.isInteger(n) && n > 0) counts[id] = Math.min(99, n);
+  }
+  return {
+    daily: { key: typeof src.daily?.key === 'string' ? src.daily.key.slice(0, 20) : '', counts },
+    tower: Number.isInteger(src.tower) ? Math.max(0, Math.min(100, src.tower)) : 0,
+  };
 }
 
 // ---------- experience and materials ----------
@@ -403,6 +438,28 @@ export function learnSkill(p, skillId) {
     const free = p.hotbar.indexOf(null);
     if (free >= 0) p.hotbar[free] = skillId;
   }
+  return null;
+}
+
+// Socket a rune from the bag into a gear piece. Returns an error message, or null.
+export function socketRune(p, uid, runeId) {
+  const g = findGear(p, uid);
+  if (!g) return 'ไม่พบไอเท็ม';
+  if (!RUNE_IDS.includes(runeId)) return 'ไม่ใช่รูน';
+  g.runes = g.runes || [];
+  const slots = runeSlots(GEAR[g.base]);
+  if (g.runes.length >= slots) return `ช่องรูนเต็มแล้ว (${slots} ช่อง)`;
+  if (!removeMat(p, runeId, 1)) return 'ไม่มีรูนนี้ในกระเป๋า';
+  g.runes.push(runeId);
+  return null;
+}
+
+// Take a rune back out into the bag. Returns an error message, or null.
+export function unsocketRune(p, uid, index) {
+  const g = findGear(p, uid);
+  if (!g || !g.runes?.[index]) return 'ไม่มีรูนในช่องนี้';
+  const [id] = g.runes.splice(index, 1);
+  addMat(p, id, 1);
   return null;
 }
 

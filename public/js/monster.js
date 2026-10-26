@@ -125,7 +125,7 @@ export class Monster {
       this.group.scale.setScalar(this.def.size * k);
       if (this.deadT <= 0) this.group.visible = false;
       this.respawnT -= dt;
-      if (this.respawnT <= 0) this.respawn();
+      if (this.respawnT <= 0 && !this.noRespawn) this.respawn();
       return false;
     }
 

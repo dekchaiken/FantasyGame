@@ -1,7 +1,8 @@
 import { icon } from './icons.js';
 import { CLASSES, HUD_MENUS } from './config.js';
-import { MAPS, NPCS, QUESTS, MATERIALS, GEAR, RARITY, MAX_ENH, ENH_DOWN_FROM } from './data.js';
-import { SKILL_TREE, TIER_LEVEL, MAX_RANK, JOB_LEVEL, JOB_NAMES, rankMult, rankCooldown } from './skills.js';
+import { MAPS, NPCS, QUESTS, MATERIALS, GEAR, RARITY, MAX_ENH, ENH_DOWN_FROM, DUNGEONS, TOWER } from './data.js';
+import { SKILL_TREE, TIER_LEVEL, MAX_RANK, JOB_LEVEL, JOB_NAMES, PASSIVE2_LEVEL, rankMult, rankCooldown } from './skills.js';
+import * as DG from './dungeon.js';
 import { Sfx } from './sfx.js';
 import * as P from './progress.js';
 import { drawThumb } from './thumb.js';
@@ -78,9 +79,19 @@ export const Hud = {
         case 'skill': g.useSkill(Number(d.key)); break;
         case 'equip': g.equip(d.uid); break;
         case 'cat': this.windowData.cat = d.cat; this.windowData.sel = null; this.refresh(g); break;
-        case 'select': this.windowData.sel = d.uid; this.refresh(g); break;
+        case 'select': {
+          // A rune is picked as the socket source and does not replace the gear being viewed.
+          const rune = d.uid.startsWith('mat:') && MATERIALS[d.uid.slice(4)]?.rune ? d.uid.slice(4) : null;
+          if (rune) this.windowData.rune = this.windowData.rune === rune ? null : rune;
+          else this.windowData.sel = d.uid;
+          this.refresh(g);
+          break;
+        }
         case 'craft': g.craft(d.line, Number(d.band)); break;
         case 'job': g.chooseJob(d.line); break;
+        case 'dungeon': this.close(); g.enterDungeon(d.id); break;
+        case 'socket': g.socketRune(d.uid, d.rune); break;
+        case 'unsocket': g.unsocketRune(d.uid, Number(d.index)); break;
         case 'unequip': g.unequip(d.slot); break;
         case 'sell': g.sell(d.uid); break;
         case 'learn': {
@@ -424,6 +435,7 @@ const CATS = [
   { id: 'craft', label: 'วัสดุคราฟ', icon: 'ore' },
   { id: 'upgrade', label: 'อัปเกรด', icon: 'gem' },
   { id: 'potion', label: 'ยา', icon: 'potion' },
+  { id: 'rune', label: 'รูน', icon: 'gem' },
 ];
 const ARMOR_SLOT_CATS = ['hat', 'shirt', 'pants', 'shoes'];
 const ACC_SLOT_CATS = ['ring', 'bracelet'];
@@ -436,7 +448,7 @@ function itemsInCat(g, cat) {
   if (cat === 'weapon') return p.gear.filter((x) => GEAR[x.base].slot === 'weapon').map((x) => ({ key: x.uid, gear: x }));
   if (cat === 'armor') return p.gear.filter((x) => ARMOR_SLOT_CATS.includes(GEAR[x.base].slot)).map((x) => ({ key: x.uid, gear: x }));
   if (cat === 'acc') return p.gear.filter((x) => ACC_SLOT_CATS.includes(GEAR[x.base].slot)).map((x) => ({ key: x.uid, gear: x }));
-  const mat = { quest: 'quest', craft: 'craft', upgrade: 'upgrade', potion: 'potion' }[cat];
+  const mat = { quest: 'quest', craft: 'craft', upgrade: 'upgrade', potion: 'potion', rune: 'rune' }[cat];
   return Object.entries(p.mats).filter(([id]) => MATERIALS[id].cat === mat).map(([id, n]) => ({ key: 'mat:' + id, mat: id, count: n }));
 }
 
@@ -444,6 +456,7 @@ function bagHtml(g, hud) {
   const p = g.p;
   const cat = hud.windowData.cat || 'weapon';
   const sel = hud.windowData.sel;
+  const runeSel = hud.windowData.rune && p.mats[hud.windowData.rune] ? hud.windowData.rune : null;
   const doll = (slot) => {
     const item = P.findGear(p, p.equip[slot]);
     const color = item ? GEAR[item.base].gcolor : 'rgba(120,170,255,0.25)';
@@ -467,7 +480,7 @@ function bagHtml(g, hud) {
         <span class="bi-ico">${icon(base.icon)}</span>${it.gear.enh ? `<em>+${it.gear.enh}</em>` : ''}${eq ? '<i class="eq-dot"></i>' : ''}<small>${esc(base.name)}</small></button>`;
     }
     const m = MATERIALS[it.mat];
-    return `<button class="bag-item mat${sel === it.key ? ' sel' : ''}" style="--gc:${RARITY[m.rarity].color}" data-act="select" data-uid="${it.key}">
+    return `<button class="bag-item mat${sel === it.key || runeSel === it.mat ? ' sel' : ''}" style="--gc:${RARITY[m.rarity].color}" data-act="select" data-uid="${it.key}">
       <span class="bi-ico">${icon(m.icon)}</span><b class="cnt">x${it.count}</b><small>${esc(m.name)}</small></button>`;
   }).join('') : '<div class="empty bag-empty">ไม่มีรายการในหมวดนี้</div>';
 
@@ -482,7 +495,7 @@ function bagHtml(g, hud) {
     }
   } else if (sel) {
     const item = P.findGear(p, sel);
-    if (item) detail = gearDetail(g, item);
+    if (item) detail = gearDetail(g, item, runeSel);
   }
 
   return `<div class="bag-top">
@@ -504,7 +517,7 @@ function GEAR_SLOTS_EQUIPPED(p, uid) {
   return Object.values(p.equip).includes(uid);
 }
 
-function gearDetail(g, item) {
+function gearDetail(g, item, runeSel) {
   const p = g.p;
   const base = GEAR[item.base];
   const eq = GEAR_SLOTS_EQUIPPED(p, item.uid);
@@ -520,7 +533,7 @@ function gearDetail(g, item) {
   return `<div class="detail-head"><span class="di" style="color:${base.gcolor}">${icon(base.icon)}</span>
       <div>${frameRow(base)}<b>${gearLabel(item)}</b><small>${SLOT_LABEL[base.slot] || 'อาวุธ'} · ${GRADES_NAME(base.grade)} · ต้องเลเวล ${base.level} · ${stats}${base.classId ? ' · ' + (base.classId === g.character.classId ? 'สายของคุณ' : 'ของสายอาชีพอื่น') : ''}</small>
       <ul class="opts">${optionsHtml(item)}</ul></div></div>
-    <div class="detail-actions">${btns.join('')}</div>${enh}`;
+    <div class="detail-actions">${btns.join('')}</div>${enh}${runeRow(item, base, runeSel)}`;
 }
 
 function GRADES_NAME(i) {
@@ -597,7 +610,7 @@ function questsHtml(g, hud) {
 
 function mapHtml(g) {
   const p = g.p;
-  return Object.entries(MAPS).map(([id, m]) => {
+  return Object.entries(MAPS).filter(([, m]) => !m.hidden).map(([id, m]) => {
     const ok = P.mapUnlocked(p, id);
     return `<div class="map-card${ok ? '' : ' locked'}${g.map === id ? ' here' : ''}">
       <div class="map-ico">${icon(id === 'town' ? 'shield' : id === 'forest' ? 'leaf' : 'ore')}</div>
@@ -630,6 +643,7 @@ function npcHtml(g, npcId) {
   }
   if (npcId === 'smith') html += craftHtml(g);
   if (npcId === 'jobmaster') html += jobHtml(g);
+  if (npcId === 'dungeonmaster') html += dungeonHtml(g);
   html += `<div class="row-meta"><span>${icon('coin')} ${fmt(p.gold)} เหรียญ</span><button class="btn-ghost sm" data-act="talk" data-npc="${npcId}">คุยต่อ</button></div>`;
   return html;
 }
@@ -825,6 +839,7 @@ function skillsHtml(g, w) {
       <div class="sk-points"><span>แต้มสกิล</span><b>${P.skillPoints(p)}</b><small>+2 ต่อเลเวล</small></div>
       <div class="sub-title">ปุ่มลัด 1-6</div>
       <div class="hb-list">${slots}</div>
+      <div class="sub-title">พาสซีพอาชีพ</div>${passiveHtml(p)}
       <div class="sub-title">สเตตัส</div>
       <div class="sk-hstats">${[['ATK', fmt(st.atk)], ['DEF', fmt(st.def)], ['HP', fmt(st.maxHp)], ['MP', fmt(st.maxMp)], ['สกิลดาเมจ', `+${st.skillMg}%`], ['ลดคูลดาวน์', `${st.cdr}%`]]
         .map(([k, v]) => `<div><span>${k}</span><b>${v}</b></div>`).join('')}</div>
@@ -837,4 +852,54 @@ function skillsHtml(g, w) {
       <div class="sk-tree">${board}</div>
       <div class="sk-detail" style="--lc:${selCol?.color || LINE_COLORS[0]}">${detail}</div>
     </section></div>`;
+}
+
+// ---------- rune sockets, passives and dungeons ----------
+// Sockets on a gear piece. A rune selected in the bag can be socketed into an empty one.
+function runeRow(item, base, runeSel) {
+  const slots = P.runeSlots(base);
+  const socketed = item.runes || [];
+  const cells = Array.from({ length: slots }, (_, i) => {
+    const id = socketed[i];
+    if (id) {
+      return `<button class="rune-slot filled" style="--gc:${RARITY[MATERIALS[id].rarity].color}" data-act="unsocket" data-uid="${item.uid}" data-index="${i}" title="กดเพื่อถอดรูน">${icon('gem')}<span>${esc(MATERIALS[id].name)}</span></button>`;
+    }
+    return `<button class="rune-slot" data-act="socket" data-uid="${item.uid}" data-rune="${runeSel || ''}" ${runeSel ? '' : 'disabled'} title="${runeSel ? 'ฝังรูนที่เลือกในกระเป๋า' : 'เลือกรูนในกระเป๋าก่อน'}">${icon('gem')}<span>${runeSel ? 'ฝังรูนที่เลือก' : 'ช่องว่าง'}</span></button>`;
+  }).join('');
+  const bonus = socketed.map((id) => `+${MATERIALS[id].rune.v} ${MATERIALS[id].rune.label}`).join(' · ');
+  return `<div class="rune-box"><div class="sub-title">${icon('gem')} รูน ${socketed.length}/${slots}</div>
+    <div class="rune-row">${cells}</div>${bonus ? `<small class="rune-bonus">${esc(bonus)}</small>` : ''}</div>`;
+}
+
+function passiveHtml(p) {
+  const list = P.passivesOf(p);
+  if (!list.length) return '<small class="muted">ปลดพาสซีพเมื่อเลือกอาชีพขั้นที่ 1 แล้ว</small>';
+  return list.map((ps, i) => `<div class="passive${ps.unlocked ? ' on' : ''}"><b>${esc(ps.name)}</b><small>${esc(ps.desc)}</small>
+    <em>${ps.unlocked ? 'ทำงานอยู่' : `ปลดที่เลเวล ${i === 0 ? JOB_LEVEL : PASSIVE2_LEVEL}`}</em></div>`).join('');
+}
+
+// Dungeon master window: farm dungeons with daily entries, and the endless tower.
+function dungeonHtml(g) {
+  const p = g.p;
+  const today = DG.dayKey();
+  const farms = Object.entries(DUNGEONS).map(([id, d]) => {
+    const locked = p.level < d.minLevel;
+    const left = DG.entriesLeft(p, id, today);
+    return `<div class="dg-card${locked ? ' locked' : ''}">
+      <div class="dg-info"><b>${esc(d.name)}</b><small>${esc(d.desc)}</small>
+        <div class="dg-meta"><span>เลเวล ${d.minLevel}+</span><span>${d.waves.length} ด่าน</span><span>วันนี้เหลือ ${left}/${d.daily}</span></div></div>
+      ${locked ? `<span class="tag lock">${icon('lock')} เลเวล ${d.minLevel}</span>`
+        : `<button class="btn-primary sm" data-act="dungeon" data-id="${id}" ${left > 0 ? '' : 'disabled'}>เข้า</button>`}
+    </div>`;
+  }).join('');
+  const towerLocked = p.level < TOWER.minLevel;
+  const full = p.dungeon.tower >= TOWER.floors;
+  const tower = `<div class="dg-card tower${towerLocked ? ' locked' : ''}">
+      <div class="dg-info"><b>${esc(TOWER.name)}</b><small>${esc(TOWER.desc)}</small>
+        <div class="dg-meta"><span>${TOWER.floors} ชั้น</span><span>ผ่านแล้ว ${p.dungeon.tower} ชั้น</span></div></div>
+      ${towerLocked ? `<span class="tag lock">${icon('lock')} เลเวล ${TOWER.minLevel}</span>`
+        : `<button class="btn-primary sm" data-act="dungeon" data-id="tower" ${full ? 'disabled' : ''}>${full ? 'ผ่านครบแล้ว' : `เข้าชั้น ${p.dungeon.tower + 1}`}</button>`}
+    </div>`;
+  return `<div class="sub-title">${icon('shield')} ดันเจี้ยนประจำวัน</div><div class="dg-list">${farms}</div>
+    <div class="sub-title">${icon('star')} หอคอย</div><div class="dg-list">${tower}</div>`;
 }

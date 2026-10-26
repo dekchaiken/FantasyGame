@@ -10,7 +10,8 @@ import { API } from './api.js';
 import { CLASSES } from './config.js';
 import { JOB_NAMES } from './skills.js';
 import { Sfx } from './sfx.js';
-import { MAPS, PORTALS, NPCS, MONSTERS, QUESTS, MATERIALS, GEAR, RARITY, GRADES } from './data.js';
+import { MAPS, PORTALS, NPCS, MONSTERS, QUESTS, MATERIALS, GEAR, RARITY, GRADES, DUNGEONS, TOWER } from './data.js';
+import * as DG from './dungeon.js';
 import { SKILL_BY_ID, rankMult, rankCooldown } from './skills.js';
 import * as P from './progress.js';
 import { Stage } from './stage.js';
@@ -78,6 +79,7 @@ export const Game = {
   auto: false,
   exploreT: 0,
   questAuto: false,
+  run: null,
   moveTarget: null,
   targetMon: null,
   interactNpc: null,
@@ -187,6 +189,7 @@ export const Game = {
       Hud.toast(`ต้องเลเวล ${MAPS[id].minLevel} ขึ้นไปจึงเข้า${MAPS[id].name}ได้`, 'warn');
       return false;
     }
+    if (id !== 'dungeon') this.run = null;
     this.transitioning = true;
     if (!opts.silent) {
       Hud.fade(true);
@@ -433,6 +436,7 @@ export const Game = {
     }
     if (this.auto) this.autoTick(dt);
     if (this.questAuto) this.questTick(dt);
+    this.runTick(dt);
 
     const len = Math.hypot(ix, iz);
     h.moving = len > 0;
@@ -1009,6 +1013,135 @@ export const Game = {
       return;
     }
     if (!this.auto) this.autoTick(dt);
+  },
+
+  // ---------- dungeons and tower ----------
+  async enterDungeon(id) {
+    const tower = id === 'tower';
+    const d = tower ? TOWER : DUNGEONS[id];
+    const floor = tower ? this.p.dungeon.tower + 1 : 0;
+    if (this.p.level < d.minLevel) { Hud.toast(`ต้องเลเวล ${d.minLevel} ขึ้นไป`, 'warn'); Sfx.play('error'); return; }
+    if (!tower && DG.entriesLeft(this.p, id) <= 0) { Hud.toast('วันนี้เข้าดันเจี้ยนนี้ครบแล้ว', 'warn'); Sfx.play('error'); return; }
+    if (tower && floor > TOWER.floors) { Hud.toast('ผ่านหอคอยครบทุกชั้นแล้ว', 'gold'); return; }
+    if (!tower) DG.useEntry(this.p, id);
+    if (!(await this.enterMap('dungeon', [0, 6]))) return;
+    this.run = { id, kind: tower ? 'tower' : 'farm', waves: tower ? null : d.waves, idx: 0, floor, pause: 1.2, waveOn: false, done: false };
+    Hud.toast(tower ? `หอคอย เริ่มชั้น ${floor}` : d.name, 'gold');
+    Sfx.play('learn');
+    this.dirty = true;
+    Hud.refresh(this);
+  },
+
+  // Drives a run: waves spawn after a short pause, and the next one follows when the field is clear.
+  runTick(dt) {
+    const r = this.run;
+    if (!r || r.done || this.map !== 'dungeon' || !this.world) return;
+    if (r.pause > 0) {
+      r.pause -= dt;
+      if (r.pause <= 0) this.runSpawn();
+      return;
+    }
+    if (!r.waveOn || this.world.monsters.some((m) => m.alive)) return;
+    r.waveOn = false;
+    if (r.kind === 'tower') {
+      this.grantTowerFloor(r.floor);
+      r.floor += 1;
+      if (r.floor > TOWER.floors) { this.runFinish(); return; }
+    } else if (r.idx >= r.waves.length) {
+      this.runFinish();
+      return;
+    }
+    r.pause = 2.2;
+  },
+
+  runSpawn() {
+    const r = this.run;
+    if (r.kind === 'tower') {
+      this.spawnWave(DG.towerWave(r.floor), DG.towerMult(r.floor));
+      Hud.toast(r.floor % 10 === 0 ? `ชั้น ${r.floor} · บอสมาแล้ว!` : `ชั้น ${r.floor}`, r.floor % 10 === 0 ? 'warn' : '');
+    } else {
+      this.spawnWave(r.waves[r.idx]);
+      r.idx += 1;
+      Hud.toast(`ด่าน ${r.idx} / ${r.waves.length}`);
+    }
+    r.waveOn = true;
+  },
+
+  // Dungeon monsters use the scaled stats and never respawn. Tower monsters keep the hero's level so exp is not cut.
+  spawnWave(wave, mult = 1) {
+    for (const [mid, count] of wave) {
+      const base = MONSTERS[mid];
+      const boss = mid === 'tower_boss' ? 1.6 : 1; // bosses hit harder and take more hits
+      const def = mult === 1 ? base : {
+        ...base, hp: Math.round(base.hp * mult * boss), atk: Math.round(base.atk * mult * boss), def: Math.round(base.def * (1 + (mult - 1) * 0.5)),
+        exp: Math.round(base.exp * mult), gold: base.gold.map((v) => Math.round(v * mult)), level: Math.max(base.level, this.p.level),
+      };
+      for (let i = 0; i < count; i++) {
+        const m = new Monster(this.scene, mid, def, freeSpot(this.world));
+        m.noRespawn = true;
+        this.world.monsters.push(m);
+      }
+    }
+  },
+
+  grantTowerFloor(floor) {
+    this.p.dungeon.tower = Math.max(this.p.dungeon.tower, floor);
+    this.grantReward(DG.towerReward(floor), `ชั้น ${floor} สำเร็จ`);
+  },
+
+  runFinish() {
+    const r = this.run;
+    r.done = true;
+    if (r.kind === 'farm') this.grantReward(DG.farmReward(r.id), `${DUNGEONS[r.id].name} สำเร็จ`);
+    else Hud.toast('ผ่านหอคอยครบ 100 ชั้นแล้ว', 'gold');
+  },
+
+  // Gold, exp, materials, runes and gear from a reward roll, shown in the loot card.
+  grantReward(rw, title) {
+    const gold = Math.round(rw.gold * this.stats.goldMul);
+    const exp = Math.round(rw.exp * this.stats.expMul);
+    this.p.gold += gold;
+    const items = [];
+    const view = (id) => ({ name: MATERIALS[id].name, icon: MATERIALS[id].icon, color: RARITY[MATERIALS[id].rarity].color });
+    for (const [id, n] of rw.mats) { P.addMat(this.p, id, n); items.push(view(id)); }
+    for (const id of rw.runes) { P.addMat(this.p, id, 1); items.push(view(id)); }
+    for (let i = 0; i < rw.gear; i++) {
+      const gear = P.rollDrop(this.character.classId, this.p.level);
+      if (P.addGear(this.p, gear)) {
+        const base = GEAR[gear.base];
+        items.push({ name: `${base.name} ${base.epithet}`.trim(), icon: base.icon, color: base.gcolor, rare: base.grade >= 2 });
+      } else {
+        Hud.toast('กระเป๋าเต็ม ของที่ตกหายไป', 'warn');
+      }
+    }
+    if (P.addExp(this.p, exp)) {
+      this.refreshStats(true);
+      Hud.toast(`เลเวลอัป! ตอนนี้เลเวล ${this.p.level}`, 'gold');
+    }
+    Hud.loot({ name: title, exp, gold, items });
+    Sfx.play('success', 0);
+    this.dirty = true;
+    Hud.refresh(this);
+  },
+
+  socketRune(uid, runeId) {
+    const err = P.socketRune(this.p, uid, runeId);
+    if (err) { Hud.toast(err, 'warn'); Sfx.play('error'); return; }
+    Hud.toast('ฝังรูนแล้ว', 'gold');
+    Sfx.play('learn');
+    this.refreshStats(false);
+    this.dirty = true;
+    Hud.refresh(this);
+  },
+
+  unsocketRune(uid, index) {
+    const err = P.unsocketRune(this.p, uid, index);
+    if (err) { Hud.toast(err, 'warn'); return; }
+    Hud.toast('ถอดรูนแล้ว กลับเข้ากระเป๋า');
+    Sfx.play('click');
+    this.refreshStats(false);
+    this.dirty = true;
+    Hud.refresh(this);
   },
 
   // ---------- NPCs ----------

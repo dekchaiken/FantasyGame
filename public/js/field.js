@@ -25,6 +25,9 @@ const BIOMES = {
   meadow: {
     ground: ['#9ccf5f', '#8ebf55', '#b2dc73'], path: '#d6b97a', fog: '#fff0c2', lava: null,
   },
+  dungeon: {
+    ground: ['#4a3f66', '#3f3558', '#5a4d78'], path: '#2a2440', fog: '#2a2440', lava: '#c084fc',
+  },
   ruin: {
     ground: ['#9e9bb0', '#8c8a9e', '#b3b0c4'], path: '#6f6b82', fog: '#e8dcff', lava: null,
   },
