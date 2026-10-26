@@ -18,13 +18,6 @@ function seeded(seed) {
   return () => (s = (s * 16807) % 2147483647) / 2147483647;
 }
 
-// true if a circle of radius r at (x, z) overlaps any solid box
-export function blocked(solids, x, z, r) {
-  for (const s of solids) {
-    if (x > s.minX - r && x < s.maxX + r && z > s.minZ - r && z < s.maxZ + r) return true;
-  }
-  return false;
-}
 
 export function buildTown(scene) {
   const solids = [];

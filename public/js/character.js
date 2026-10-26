@@ -110,11 +110,21 @@ export function buildCharacter(input) {
 
   const hairGroup = head.children[head.children.length - 1];
 
+  let actKind = null;
+  let actT = 0;
   return {
     group: root,
-    update(t, moving) {
+    // Plays a short action pose on top of the idle/walk cycle: 'swing' (basic attack), 'cast' (skill), 'heal'.
+    act(kind) {
+      actKind = kind;
+      actT = 0;
+    },
+    update(t, moving, dt = 0) {
       const sw = moving ? Math.sin(t * 9) : 0;
       body.position.y = moving ? Math.abs(Math.sin(t * 9)) * 0.05 : Math.sin(t * 2) * 0.012;
+      body.rotation.x = 0;
+      arms[0].rotation.z = 0;
+      arms[1].rotation.z = 0;
       legs[0].rotation.x = sw * 0.7;
       legs[1].rotation.x = -sw * 0.7;
       const idle = moving ? 0 : Math.sin(t * 2) * 0.03;
@@ -122,6 +132,27 @@ export function buildCharacter(input) {
       arms[1].rotation.x = sw * 0.6 - idle;
       head.rotation.y = Math.sin(t * 0.7) * 0.05;
       hairGroup.rotation.x = Math.sin(t * 3) * 0.02;
+      if (actKind) {
+        actT += dt;
+        const dur = actKind === 'swing' ? 0.36 : actKind === 'cast' ? 0.7 : 0.9;
+        const k = Math.min(1, actT / dur);
+        const bump = Math.sin(k * Math.PI);
+        if (actKind === 'swing') {
+          arms[1].rotation.x = -2.6 * bump;
+          arms[1].rotation.z = -0.3 * bump;
+          body.rotation.x = 0.2 * bump;
+        } else if (actKind === 'cast') {
+          arms[0].rotation.x = -2.5 * bump;
+          arms[1].rotation.x = -2.5 * bump;
+          body.position.y += 0.1 * bump;
+        } else {
+          arms[0].rotation.x = -1.6 * bump;
+          arms[1].rotation.x = -1.6 * bump;
+          arms[0].rotation.z = 1.2 * bump;
+          arms[1].rotation.z = -1.2 * bump;
+        }
+        if (k >= 1) actKind = null;
+      }
     },
     dispose() {
       root.traverse((o) => {

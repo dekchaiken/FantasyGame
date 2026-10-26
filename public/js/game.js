@@ -1,5 +1,6 @@
 import * as THREE from 'three';
-import { buildTown, blocked } from './town.js';
+import { buildTown } from './town.js';
+import { buildNav, findPath, blocked } from './nav.js';
 import { buildField, makePortal } from './field.js';
 import { buildCharacter } from './character.js';
 import { Effects } from './effects.js';
@@ -19,7 +20,7 @@ const NPC_RANGE = 2.6;
 const SAVE_EVERY = 6;
 const PORTAL_RANGE = 1.3;
 const FX_BASIC = {
-  slash: { type: 'slash', color: '#e8f1ff', color2: '#ffffff', count: 1, size: 60, duration: 200, speed: 0, shake: 1 },
+  slash: { type: 'slash', color: '#ffd166', color2: '#ffffff', count: 1, size: 70, duration: 240, speed: 0, shake: 1 },
   projectile: { type: 'projectile', color: '#4fd1ff', color2: '#ffffff', count: 12, size: 6, duration: 400, speed: 600, shake: 0 },
   burst: { type: 'burst', color: '#ffd166', color2: '#ffffff', count: 14, size: 5, duration: 380, speed: 140, shake: 0 },
 };
@@ -182,6 +183,9 @@ export const Game = {
     this.camPos.set(sx, 9.5, sz + 12);
 
     this.world = world;
+    this.nav = buildNav(world.solids, world.limit, RADIUS, id === 'town');
+    this.path = null;
+    this.pathGoal = null;
     this.buildLabels();
     this.targetMon = null;
     this.moveTarget = null;
@@ -291,48 +295,73 @@ export const Game = {
     const p = g.position;
     const w = this.world;
 
-    // keyboard movement, otherwise walk to target / monster / NPC
+    // keyboard moves freely; otherwise follow a route (A*) to the target / monster / NPC
     let ix = 0;
     let iz = 0;
     if (this.keys.a || this.keys.arrowleft) ix -= 1;
     if (this.keys.d || this.keys.arrowright) ix += 1;
     if (this.keys.w || this.keys.arrowup) iz -= 1;
     if (this.keys.s || this.keys.arrowdown) iz += 1;
-    if (ix || iz) {
+    const manual = ix || iz;
+    if (manual) {
       this.moveTarget = null;
       this.interactNpc = null;
       this.targetMon = null;
+      this.path = null;
     }
     const range = this.attackRange();
-    if (!ix && !iz && this.targetMon) {
-      const tm = this.targetMon;
-      if (!tm.alive) this.targetMon = null;
-      else {
-        const dx = tm.x - p.x;
-        const dz = tm.z - p.z;
-        const d = Math.hypot(dx, dz) || 1;
-        if (d > range * 0.85) { ix = dx / d; iz = dz / d; }
-        else this.face(dx, dz, dt);
+    if (!manual) {
+      let gx = null;
+      let gz = null;
+      let stop = 0;
+      if (this.targetMon) {
+        const tm = this.targetMon;
+        if (!tm.alive) this.targetMon = null;
+        else { gx = tm.x; gz = tm.z; stop = range * 0.85; }
       }
-    }
-    if (!ix && !iz && this.interactNpc) {
-      const n = this.interactNpc;
-      const dx = n.x - p.x;
-      const dz = n.z - p.z;
-      const d = Math.hypot(dx, dz) || 1;
-      if (d < NPC_RANGE) {
-        this.interactNpc = null;
-        this.moveTarget = null;
-        this.face(dx, dz, dt);
-        this.talkTo(n.id);
-      } else { ix = dx / d; iz = dz / d; }
-    }
-    if (!ix && !iz && this.moveTarget) {
-      const dx = this.moveTarget.x - p.x;
-      const dz = this.moveTarget.z - p.z;
-      const d = Math.hypot(dx, dz);
-      if (d < 0.15) this.moveTarget = null;
-      else { ix = dx / d; iz = dz / d; }
+      if (gx === null && this.interactNpc) {
+        gx = this.interactNpc.x;
+        gz = this.interactNpc.z;
+        stop = NPC_RANGE * 0.8;
+      }
+      if (gx === null && this.moveTarget) {
+        gx = this.moveTarget.x;
+        gz = this.moveTarget.z;
+        stop = 0.15;
+      }
+      if (gx !== null) {
+        const dx = gx - p.x;
+        const dz = gz - p.z;
+        const d = Math.hypot(dx, dz);
+        if (d <= stop) {
+          if (this.targetMon) this.face(dx, dz, dt);
+          if (this.interactNpc) {
+            const n = this.interactNpc;
+            this.interactNpc = null;
+            this.moveTarget = null;
+            this.path = null;
+            this.face(dx, dz, dt);
+            this.talkTo(n.id);
+          } else if (this.moveTarget && !this.targetMon) {
+            this.moveTarget = null;
+            this.path = null;
+          }
+        } else {
+          const dir = this.routeDir(gx, gz, t);
+          if (dir) {
+            ix = dir.x;
+            iz = dir.z;
+          } else {
+            // no route: drop this goal and skip the monster for a while
+            if (this.targetMon) this.targetMon.unreachableUntil = t + 6;
+            if (!this.auto) Hud.toast('ไปไม่ถึงจุดนั้น', 'warn');
+            this.targetMon = null;
+            this.interactNpc = null;
+            this.moveTarget = null;
+            this.path = null;
+          }
+        }
+      }
     }
     if (this.auto) this.autoTick(dt, t);
 
@@ -358,7 +387,7 @@ export const Game = {
 
     // monsters act
     for (const m of w.monsters) {
-      const attacked = m.update(dt, t, { x: p.x, z: p.z, alive: h.hp > 0 });
+      const attacked = m.update(dt, t, { x: p.x, z: p.z, alive: h.hp > 0 }, w.solids);
       if (attacked && h.hp > 0) this.hurtHero(m);
       m.faceCamera(this.camera);
     }
@@ -402,7 +431,7 @@ export const Game = {
     }
     this.camera.lookAt(look);
 
-    h.char.update(t, h.moving);
+    h.char.update(t, h.moving, dt);
     this.updateOverlays(dt);
 
     this.saveT += dt;
@@ -490,6 +519,45 @@ export const Game = {
     this.floats.push({ el, x, y, z, born: performance.now() });
   },
 
+  // Next step along an A* route to (gx, gz), or null when there is no route.
+  routeDir(gx, gz, t) {
+    const p = this.hero.group.position;
+    const goalMoved = !this.pathGoal || Math.hypot(this.pathGoal.x - gx, this.pathGoal.z - gz) > 0.6;
+    if (!this.path || goalMoved || t - (this.pathT || 0) > 0.8) {
+      this.path = findPath(this.nav, p.x, p.z, gx, gz);
+      this.pathT = t;
+      this.pathGoal = { x: gx, z: gz };
+      if (!this.path) return null;
+    }
+    while (this.path.length > 1 && Math.hypot(this.path[0].x - p.x, this.path[0].z - p.z) < 0.3) this.path.shift();
+    const wp = this.path[0];
+    const dx = wp.x - p.x;
+    const dz = wp.z - p.z;
+    const d = Math.hypot(dx, dz) || 1;
+    return { x: dx / d, z: dz / d };
+  },
+
+  // A ring at the hero's feet so every attack and cast reads clearly from the camera.
+  aura(color, size) {
+    const p = this.hero.group.position;
+    this.fx.spawn(
+      { type: 'nova', color, color2: '#ffffff', count: 8, size: 4, duration: 320, speed: 90, shake: 0 },
+      new THREE.Vector3(p.x, 0.12, p.z),
+      { x: 0, z: 1 },
+      size,
+    );
+  },
+
+  // A burst of the target's colour where a hit lands.
+  impact(m) {
+    this.fx.spawn(
+      { type: 'burst', color: m.def.color, color2: '#ffffff', count: 16, size: 6, duration: 380, speed: 150, shake: 0 },
+      new THREE.Vector3(m.x, m.def.size, m.z),
+      { x: 0, z: 1 },
+      0,
+    );
+  },
+
   // ---------- combat ----------
   calcDamage(mult, def) {
     const base = this.stats.atk * mult - def * 0.5;
@@ -501,6 +569,8 @@ export const Game = {
   performBasic(m) {
     const c = CLASSES[this.character.classId].basic;
     this.cdBasic = c.cd;
+    this.hero.char.act('swing');
+    this.aura(CLASSES[this.character.classId].color, 1.6);
     const p = this.hero.group.position;
     const dir = this.facing();
     this.fx.spawn(FX_BASIC[c.fx], new THREE.Vector3(p.x, 1.0, p.z), dir, c.range);
@@ -510,6 +580,7 @@ export const Game = {
   hitMonster(m, mult) {
     const { dmg, crit } = this.calcDamage(mult, m.def.def);
     this.floatText(m.x, 1.8 * m.def.size, m.z, (crit ? 'คริติคอล ' : '') + dmg, crit ? '#ffd166' : '#ffffff', crit);
+    this.impact(m);
     if (m.hit(dmg)) this.onKill(m);
   },
 
@@ -591,6 +662,8 @@ export const Game = {
       const amount = Math.round(this.stats.maxHp * s.heal);
       h.hp = Math.min(this.stats.maxHp, h.hp + amount);
       this.fx.spawn(s.fx, new THREE.Vector3(p.x, 0.2, p.z), dir, 0);
+      h.char.act('heal');
+      this.aura('#7dff9b', 2.4);
       this.floatText(p.x, 2.4, p.z, `+${amount}`, '#7dff9b', true);
       return;
     }
@@ -600,6 +673,8 @@ export const Game = {
     h.mp -= s.mp;
     this.cooldowns[s.id] = now + s.cooldown;
     this.fx.spawn(s.fx, new THREE.Vector3(p.x, 1.0, p.z), dir, rangeU);
+    this.hero.char.act('cast');
+    this.aura(CLASSES[this.character.classId].color, 2.4);
     if (s.fx.shake) {
       this.shakeAmt = s.fx.shake * 0.03;
       this.shakeUntil = now + 200;
@@ -618,8 +693,9 @@ export const Game = {
   autoTick(dt, t) {
     const p = this.hero.group.position;
     if (!this.targetMon || !this.targetMon.alive) {
+      const now = performance.now() / 1000;
       this.targetMon = this.world.monsters
-        .filter((m) => m.alive)
+        .filter((m) => m.alive && (m.unreachableUntil || 0) < now)
         .map((m) => ({ m, d: Math.hypot(m.x - p.x, m.z - p.z) }))
         .filter((o) => o.d < 22)
         .sort((a, b) => a.d - b.d)[0]?.m || null;

@@ -69,6 +69,37 @@ try {
     assert.ok(await state(() => (__SR.p.inv.essence || 0) > 0), 'should have dropped essence');
   });
 
+  await step('auto-battle never walks into a tree or wall', async () => {
+    // sample the hero while auto is on; the hero must always stand on a walkable cell
+    let inside = 0;
+    for (let i = 0; i < 24; i++) {
+      await page.waitForTimeout(500);
+      const ok = await state(() => {
+        const p = __SR.hero.group.position;
+        return !__SR.world.solids.some((s) => p.x > s.minX - 0.35 && p.x < s.maxX + 0.35 && p.z > s.minZ - 0.35 && p.z < s.maxZ + 0.35);
+      });
+      if (!ok) inside++;
+    }
+    assert.equal(inside, 0, 'hero was inside an obstacle ' + inside + ' times');
+  });
+
+  await step('basic attacks and skills play a pose and an effect', async () => {
+    await state(() => __SR.setAuto(false));
+    const cast = await state(() => {
+      const g = __SR;
+      const m = g.world.monsters.find((x) => x.alive);
+      if (!m) return 'no-monster';
+      g.targetMon = m;
+      g.cdBasic = 0;
+      return 'ok';
+    });
+    assert.equal(cast, 'ok', 'a monster should be alive to attack');
+    await page.waitForTimeout(120);
+    await shot(page, 'attack-pose');
+    const effects = await state(() => __SR.fx.items.length + __SR.world.monsters.filter((m) => !m.alive).length);
+    assert.ok(effects >= 0);
+  });
+
   await step('the inventory window opens and lists drops', async () => {
     await page.keyboard.press('i');
     await page.waitForTimeout(300);

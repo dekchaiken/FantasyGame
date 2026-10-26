@@ -4,7 +4,9 @@
   "description": "ดินแดนสวรรค์ · web MMORPG prototype",
   "scripts": {
     "start": "node server.js",
-    "test": "node --test tests/progress.test.mjs"
+    "test": "node --test tests/progress.test.mjs tests/nav.test.mjs"
   },
-  "engines": { "node": ">=18" }
+  "engines": {
+    "node": ">=18"
+  }
 }

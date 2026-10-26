@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+import { blocked } from './nav.js';
 
 // Monsters: procedural 3D models plus a small state machine (idle -> chase -> return, and dead -> respawn).
 const std = (color, o = {}) => new THREE.MeshStandardMaterial({ color, roughness: 0.55, ...o });
@@ -115,7 +116,8 @@ export class Monster {
   }
 
   // Advances AI and animation. `hero` is {x, z, alive}. Returns true when the monster attacks this frame.
-  update(dt, t, hero) {
+  update(dt, t, hero, solids = []) {
+    this.solids = solids;
     this.phase += dt;
     if (!this.alive) {
       this.deadT -= dt;
@@ -169,16 +171,20 @@ export class Monster {
     return attacked;
   }
 
+  // moves toward (tx, tz), sliding along obstacles instead of pushing into them
   moveToward(tx, tz, step) {
     const dx = tx - this.x;
     const dz = tz - this.z;
     const d = Math.hypot(dx, dz);
     if (d < 0.05) return false;
     const s = Math.min(step, d);
-    this.x += (dx / d) * s;
-    this.z += (dz / d) * s;
+    const nx = this.x + (dx / d) * s;
+    const nz = this.z + (dz / d) * s;
+    let moved = false;
+    if (!blocked(this.solids, nx, this.z, 0.5)) { this.x = nx; moved = true; }
+    if (!blocked(this.solids, this.x, nz, 0.5)) { this.z = nz; moved = true; }
     this.group.position.set(this.x, 0, this.z);
-    return true;
+    return moved;
   }
 
   faceAngle(dx, dz, dt) {

@@ -5,7 +5,8 @@ import * as THREE from 'three';
 // so what you design there is what plays in the world.
 //
 // fx.type: burst | nova | slash | projectile | beam | heal
-const ADD = THREE.AdditiveBlending;
+// normal blending keeps effects visible on bright grass as well as dark dungeon floors
+const ADD = THREE.NormalBlending;
 const glow = (color, opacity = 1) =>
   new THREE.MeshBasicMaterial({ color, transparent: true, opacity, depthWrite: false, blending: ADD });
 
