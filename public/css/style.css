@@ -940,3 +940,6 @@ button, input, select { font: inherit; color: inherit; }
 .enh-preview em { font-style: normal; color: #9b5cff; font-weight: 600; }
 .job-skills { margin: 0; padding-left: 16px; font-size: 12px; color: var(--ink); display: flex; flex-direction: column; gap: 2px; }
 .job-skills em { font-style: normal; color: var(--muted); font-size: 11px; }
+.dock-btn.sound { min-width: 52px; }
+.dock-btn.sound .ico { width: 20px; height: 20px; }
+.dock-btn.sound:not(.on) { opacity: 0.6; }

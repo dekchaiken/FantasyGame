@@ -304,6 +304,11 @@ export const Hud = {
 
     // dock: auto, potion and the six hotbar slots
     $('dock-auto').classList.toggle('on', !!g.auto);
+    if (this.soundMuted !== Sfx.muted) {
+      this.soundMuted = Sfx.muted;
+      $('dock-sound').innerHTML = icon(Sfx.muted ? 'mute' : 'sound');
+      $('dock-sound').classList.toggle('on', !Sfx.muted);
+    }
     $('dock-auto-label').textContent = g.auto ? 'ออโต้ เปิด' : 'ออโต้ ปิด';
     const potions = p.mats.potion_hp || 0;
     $('dock-potion-count').textContent = potions;

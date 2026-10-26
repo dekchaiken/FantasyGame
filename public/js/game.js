@@ -508,6 +508,7 @@ export const Game = {
     // portals
     for (const e of w.portals) {
       if (Math.hypot(e.x - p.x, e.z - p.z) < PORTAL_RANGE) {
+        Sfx.play('portal');
         this.enterMap(e.to, e.arrive);
         break;
       }
@@ -537,6 +538,12 @@ export const Game = {
     }
     this.camera.lookAt(look);
 
+    if (h.moving && !this.dying) {
+      this.stepT = (this.stepT || 0) + dt;
+      if (this.stepT > 0.36) { this.stepT = 0; Sfx.play('step'); }
+    } else {
+      this.stepT = 0;
+    }
     h.char.update(t, h.moving, dt);
     this.updateOverlays(dt);
 
@@ -668,12 +675,14 @@ export const Game = {
     this.aura(CLASSES[this.character.classId].color, 1.6);
     const p = this.hero.group.position;
     this.fx.spawn(this.weaponFx(), new THREE.Vector3(p.x, 1.0, p.z), this.facing(), c.range);
+    Sfx.play('swing', this.character.classId);
     // the hit lands at the contact point of the swing, so the damage matches what is seen
     this.pendingHit = { m, t: 0.14 };
   },
 
   hitMonster(m, mult, knock = 0.4) {
     const { dmg, crit } = this.calcDamage(mult, m.def.def);
+    Sfx.play(crit ? 'crit' : 'hit');
     this.floatText(m.x, 1.8 * m.def.size, m.z, (crit ? 'คริติคอล ' : '') + dmg, crit ? '#ffd166' : '#ffffff', crit);
     if (crit) {
       this.shakeAmt = 0.08;
@@ -688,11 +697,14 @@ export const Game = {
       m.group.position.set(m.x, 0, m.z);
     }
     this.impact(m);
-    if (m.hit(dmg)) this.onKill(m);
+    const dead = m.hit(dmg);
+    Sfx.play(dead ? 'monsterDie' : 'monsterHurt', m.id === 'tower_boss' ? 'boss' : m.def.shape);
+    if (dead) this.onKill(m);
   },
 
   hurtHero(m) {
     const h = this.hero;
+    Sfx.play('heroHurt');
     let dmg = Math.max(1, Math.round((m.def.atk - this.stats.def * 0.5) * (0.9 + Math.random() * 0.2)));
     if (h.shieldT > 0) dmg = Math.max(1, Math.round(dmg * (1 - h.shield)));
     h.hp -= dmg;
@@ -737,6 +749,8 @@ export const Game = {
       this.refreshStats(true);
       Hud.toast(`เลเวลอัป! ตอนนี้เลเวล ${this.p.level} · ได้ ${2} แต้มสกิล`, 'gold');
     }
+    Sfx.play(items.length ? 'pickup' : 'coin');
+    if (levels) Sfx.play('levelup');
     Hud.loot({ name: d.name, exp, gold, items });
     msgs.forEach((t) => Hud.toast(t, 'quest'));
     if (this.targetMon === m) this.targetMon = null;
@@ -792,6 +806,7 @@ export const Game = {
       h.mp -= s.mp;
       this.cooldowns[s.id] = now + cdMs;
       h.char.act(poseFor(s));
+      Sfx.play('cast', s.heal ? 'heal' : s.shield ? 'guard' : 'cast');
       this.fx.spawn(s.fx, new THREE.Vector3(p.x, 0.2, p.z), dir, 0);
       this.aura(s.heal ? '#7dff9b' : '#8fd8ff', 2.4);
       return;
@@ -802,6 +817,7 @@ export const Game = {
     h.mp -= s.mp;
     this.cooldowns[s.id] = now + cdMs;
     h.char.act(poseFor(s));
+    Sfx.play('cast', s.heal ? 'heal' : s.shield ? 'guard' : 'cast');
     this.aura(CLASSES[this.character.classId].color, 2.4);
     this.fx.spawn(s.fx, new THREE.Vector3(p.x, 1.0, p.z), dir, rangeU);
     if (s.fx.shake) {
@@ -1257,7 +1273,7 @@ export const Game = {
     node.mesh.visible = false;
     this.floatText(node.x, 1.2, node.z, `+${n} ${mat.name}`, '#8fe39a', true);
     if (P.addExp(this.p, exp)) { this.refreshStats(true); Hud.toast(`เลเวลอัป! ตอนนี้เลเวล ${this.p.level}`, 'gold'); }
-    Sfx.play('learn');
+    Sfx.play('pickup');
     this.dirty = true;
     Hud.refresh(this);
   },
