@@ -173,47 +173,47 @@ export const ENH_DOWN_FROM = 7; // a failed attempt at this level or higher drop
 // Monster stats. drops: [itemId, chance]. gearChance: chance for a gear piece on kill.
 export const MONSTERS = {
   mushroom: {
-    name: 'เห็ดเรืองแสง', level: 2, hp: 55, atk: 6, def: 1, exp: 22, gold: [4, 8], respawn: 10,
+    name: 'เห็ดเรืองแสง', level: 2, hp: 160, atk: 16, def: 1, exp: 22, gold: [4, 8], respawn: 10,
     aggro: 3.5, range: 1.2, cd: 1.6, speed: 1.1, size: 0.9, shape: 'mushroom', color: '#9be36b',
     drops: [['herb', 0.4], ['essence', 0.3], ['potion_hp', 0.1], ['enh_stone', 0.04]], gearChance: 0.02,
   },
   bat: {
-    name: 'ค้างคาวป่า', level: 3, hp: 60, atk: 8, def: 1, exp: 30, gold: [5, 9], respawn: 12,
+    name: 'ค้างคาวป่า', level: 3, hp: 238, atk: 20, def: 2, exp: 30, gold: [5, 9], respawn: 12,
     aggro: 6, range: 1.4, cd: 1.0, speed: 3.4, size: 0.9, shape: 'bat', color: '#5b4b7a',
     drops: [['wolf_fang', 0.25], ['herb', 0.2], ['potion_hp', 0.1], ['spirit_orb_common', 0.01]], gearChance: 0.04,
   },
   cave_bat: {
-    name: 'ค้างคาวถ้ำ', level: 11, hp: 240, atk: 17, def: 6, exp: 130, gold: [16, 26], respawn: 18,
+    name: 'ค้างคาวถ้ำ', level: 11, hp: 538, atk: 45, def: 7, exp: 130, gold: [16, 26], respawn: 18,
     aggro: 6.5, range: 1.5, cd: 1.0, speed: 3.6, size: 1, shape: 'bat', color: '#b77bff',
     drops: [['crystal_ore', 0.3], ['enh_stone', 0.2], ['potion_hp', 0.15], ['spirit_orb_rare', 0.05]], gearChance: 0.1,
   },
   slime: {
-    name: 'สไลม์ใส', level: 1, hp: 40, atk: 5, def: 0, exp: 14, gold: [3, 6], respawn: 10,
+    name: 'สไลม์ใส', level: 1, hp: 130, atk: 10, def: 0, exp: 14, gold: [3, 6], respawn: 10,
     aggro: 4.5, range: 1.3, cd: 1.4, speed: 1.7, size: 1, shape: 'slime', color: '#5ee7ff',
     drops: [['essence', 0.5], ['herb', 0.25], ['potion_hp', 0.08], ['enh_stone', 0.05]], gearChance: 0.03,
   },
   wolf: {
-    name: 'หมาป่าเงา', level: 4, hp: 95, atk: 10, def: 2, exp: 34, gold: [6, 12], respawn: 14,
+    name: 'หมาป่าเงา', level: 4, hp: 275, atk: 23, def: 2, exp: 34, gold: [6, 12], respawn: 14,
     aggro: 6, range: 1.6, cd: 1.2, speed: 3.0, size: 1.1, shape: 'wolf', color: '#7d8aa6',
     drops: [['wolf_fang', 0.6], ['potion_hp', 0.15], ['enh_stone', 0.12]], gearChance: 0.07,
   },
   fire_slime: {
-    name: 'สไลม์ไฟ', level: 6, hp: 120, atk: 11, def: 2, exp: 52, gold: [8, 14], respawn: 12,
+    name: 'สไลม์ไฟ', level: 6, hp: 350, atk: 29, def: 4, exp: 52, gold: [8, 14], respawn: 12,
     aggro: 5, range: 1.3, cd: 1.3, speed: 2.0, size: 1, shape: 'slime', color: '#ff8a4c',
     drops: [['essence', 0.5], ['herb', 0.2], ['potion_hp', 0.1], ['enh_stone', 0.1]], gearChance: 0.05,
   },
   wild_wolf: {
-    name: 'หมาป่าทุ่ง', level: 8, hp: 170, atk: 15, def: 4, exp: 70, gold: [10, 16], respawn: 14,
+    name: 'หมาป่าทุ่ง', level: 8, hp: 425, atk: 36, def: 5, exp: 70, gold: [10, 16], respawn: 14,
     aggro: 6.5, range: 1.6, cd: 1.1, speed: 3.2, size: 1.1, shape: 'wolf', color: '#c9a36b',
     drops: [['wolf_fang', 0.6], ['potion_hp', 0.15], ['enh_stone', 0.15]], gearChance: 0.08,
   },
   frost_golem: {
-    name: 'โกเลมน้ำแข็ง', level: 14, hp: 460, atk: 28, def: 14, exp: 210, gold: [28, 44], respawn: 26,
+    name: 'โกเลมน้ำแข็ง', level: 14, hp: 936, atk: 59, def: 8, exp: 210, gold: [28, 44], respawn: 26,
     aggro: 7, range: 2.0, cd: 1.9, speed: 1.5, size: 1.5, shape: 'golem', color: '#8fe3ff',
     drops: [['crystal_ore', 0.8], ['potion_hp', 0.3], ['enh_stone', 0.4], ['spirit_orb_rare', 0.03]], gearChance: 0.22,
   },
   gold_golem: {
-    name: 'โกเลมทองคำ', level: 22, hp: 760, atk: 40, def: 22, exp: 360, gold: [45, 70], respawn: 30,
+    name: 'โกเลมทองคำ', level: 22, hp: 1368, atk: 86, def: 13, exp: 360, gold: [45, 70], respawn: 30,
     aggro: 7.5, range: 2.1, cd: 1.8, speed: 1.6, size: 1.6, shape: 'golem', color: '#ffd166',
     drops: [['crystal_ore', 0.9], ['potion_hp', 0.35], ['enh_stone', 0.5], ['spirit_orb_epic', 0.03]], gearChance: 0.28,
   },
@@ -223,7 +223,7 @@ export const MONSTERS = {
     drops: [['crystal_ore', 1], ['enh_stone', 1], ['spirit_orb_legendary', 0.5]], gearChance: 1,
   },
   golem: {
-    name: 'โกเลมลาวา', level: 9, hp: 280, atk: 19, def: 9, exp: 110, gold: [18, 30], respawn: 24,
+    name: 'โกเลมลาวา', level: 9, hp: 666, atk: 42, def: 5, exp: 110, gold: [18, 30], respawn: 24,
     aggro: 7, range: 2.0, cd: 2.0, speed: 1.4, size: 1.5, shape: 'golem', color: '#ff6a3d',
     drops: [['crystal_ore', 0.7], ['potion_hp', 0.3], ['enh_stone', 0.35]], gearChance: 0.2,
   },

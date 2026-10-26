@@ -28,6 +28,7 @@ const PORTAL_COLOR = { town: '#ffd166', forest: '#5ee7ff', meadow: '#9be36b', mi
 const NODE_RESPAWN = 25; // seconds before a harvested gathering node comes back
 const NODE_COLOR = { herb: '#7fe05a', essence: '#7dd3ff', crystal_ore: '#ffd166' };
 const SHIELD_TIME = 5;
+const DROP_SCALE = 0.55; // monsters drop about half as often as their table says
 const FX_BASIC_DEFAULT = {
   swordsman: { type: 'slash', color: '#ffd166', color2: '#ffffff', count: 1, size: 70, duration: 240, speed: 0, shake: 1 },
   assassin: { type: 'slash', color: '#9b8cff', color2: '#ffffff', count: 1, size: 60, duration: 180, speed: 0, shake: 1 },
@@ -464,6 +465,11 @@ export const Game = {
     this.runTick(dt);
     this.updateSpirit();
     this.updateNodes(dt);
+    // the HUD is refreshed about ten times a second so cooldowns and bars move while idle too
+    if (t - (this.hudAt || 0) > 0.1) {
+      this.hudAt = t;
+      Hud.refresh(this);
+    }
 
     const len = Math.hypot(ix, iz);
     h.moving = len > 0;
@@ -727,13 +733,13 @@ export const Game = {
     const items = [];
     const msgs = [];
     for (const [id, chance] of d.drops) {
-      if (Math.random() < chance) {
+      if (Math.random() < chance * DROP_SCALE) {
         P.addMat(this.p, id, 1);
         items.push({ name: MATERIALS[id].name, icon: MATERIALS[id].icon, color: RARITY[MATERIALS[id].rarity].color });
         msgs.push(...P.applyEvent(this.p, { type: 'collect', item: id, qty: 1 }, this.character.classId));
       }
     }
-    if (Math.random() < d.gearChance) {
+    if (Math.random() < d.gearChance * DROP_SCALE) {
       const gear = P.rollDrop(this.character.classId, this.p.level);
       if (P.addGear(this.p, gear)) {
         const base = GEAR[gear.base];

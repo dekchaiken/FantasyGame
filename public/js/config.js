@@ -4,22 +4,22 @@ export const CLASSES = {
   swordsman: {
     name: 'นักดาบ', color: '#ff5d73', weapon: 'sword', icon: 'sword',
     desc: 'ถึกทน ฟันระยะใกล้ พลังโจมตีสูง',
-    basic: { range: 2.1, cd: 0.9, fx: 'slash' },
+    basic: { range: 2.1, cd: 1.2, fx: 'slash' },
   },
   assassin: {
     name: 'นักฆ่า', color: '#8b7bff', weapon: 'dagger', icon: 'dagger',
     desc: 'คล่องตัว โจมตีรวดเร็ว ดาเมจสูงจากด้านหลัง',
-    basic: { range: 1.8, cd: 0.6, fx: 'slash' },
+    basic: { range: 1.8, cd: 0.85, fx: 'slash' },
   },
   mage: {
     name: 'นักเวทย์', color: '#4fd1ff', weapon: 'staff', icon: 'staff',
     desc: 'เวทระยะไกล MP สูง ป้อมน้อย',
-    basic: { range: 7, cd: 1.0, fx: 'projectile' },
+    basic: { range: 7, cd: 1.4, fx: 'projectile' },
   },
   priest: {
     name: 'นักพรต', color: '#ffd166', weapon: 'book', icon: 'book',
     desc: 'รักษาและค้ำจุนตัวเอง พลังศักดิ์สิทธิ์',
-    basic: { range: 4.5, cd: 1.1, fx: 'burst' },
+    basic: { range: 4.5, cd: 1.5, fx: 'burst' },
   },
 };
 
