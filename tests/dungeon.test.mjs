@@ -66,7 +66,7 @@ test('runes add to the gear stats', () => {
 
 test('passives: active from the job level, second one from level 25', () => {
   const p = P.newProgress('mage');
-  p.job = 'fire';
+  p.job = 'war_mage';
   p.level = 20;
   const list = P.passivesOf(p);
   assert.equal(list.length, 2);
@@ -80,7 +80,7 @@ test('passives: a percentage passive raises the stat, no job means no passive', 
   const p = P.newProgress('mage');
   p.level = 30;
   const plain = P.statsFor(p).skillMg;
-  p.job = 'fire';
+  p.job = 'war_mage';
   assert.ok(P.statsFor(p).skillMg > plain, 'fire gives skill damage');
   assert.equal(P.passivesOf(P.newProgress('mage')).length, 0);
 });

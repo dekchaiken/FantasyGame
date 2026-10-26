@@ -144,7 +144,7 @@ test('skill points: one per level, tiers need their line, ranks cap at three', (
   P.addExp(p, P.expToNext(1) + P.expToNext(2) + P.expToNext(3) + P.expToNext(4));
   assert.equal(P.skillPoints(p), 2 * (p.level - 1));
   assert.match(P.canLearn(p, 'mg_f2'), /ต้องเป็น/, 'tier 2 needs the job');
-  p.job = 'fire';
+  p.job = 'war_mage';
   assert.equal(P.canLearn(p, 'mg_f2'), null, 'tier 2 is open once the job is held');
   assert.match(P.canLearn(p, 'mg_i2'), /ต้องเรียนรู้|ต้องเป็น/);
   assert.equal(P.learnSkill(p, 'mg_f1'), null);
@@ -252,18 +252,18 @@ test('each level band has its own map', () => {
 
 test('job: chosen once at level 20, from the class own lines', () => {
   const p = P.newProgress('mage');
-  assert.match(P.chooseJob(p, 'fire', 'mage'), /ต้องถึงเลเวล 20/);
+  assert.match(P.chooseJob(p, 'war_mage', 'mage'), /ต้องถึงเลเวล 20/);
   p.level = 20;
-  assert.match(P.chooseJob(p, 'holy', 'mage'), /ไม่ใช่ของคลาส/);
-  assert.equal(P.chooseJob(p, 'fire', 'mage'), null);
-  assert.equal(p.job, 'fire');
-  assert.match(P.chooseJob(p, 'ice', 'mage'), /เปลี่ยนไม่ได้/);
+  assert.match(P.chooseJob(p, 'holy_priest', 'mage'), /ไม่ใช่ของคลาส/);
+  assert.equal(P.chooseJob(p, 'war_mage', 'mage'), null);
+  assert.equal(p.job, 'war_mage');
+  assert.match(P.chooseJob(p, 'frost_mage', 'mage'), /เปลี่ยนไม่ได้/);
 });
 
 test('job: other lines tier 2+ are locked, tier 1 stays open', () => {
   const p = P.newProgress('mage');
   p.level = 30;
-  p.job = 'fire';
+  p.job = 'war_mage';
   p.skills = { mg_f1: 1 };
   assert.equal(P.skillUsable(p, 'mg_f1'), true);
   assert.equal(P.skillUsable(p, 'mg_i1'), false, 'learned skills need the job too');
@@ -275,5 +275,23 @@ test('normalize keeps a job only when it belongs to the class', () => {
   const p = P.normalize({ ...P.newProgress('mage'), job: 'holy' }, 'mage');
   assert.equal(p.job, null);
   const q = P.normalize({ ...P.newProgress('mage'), job: 'fire' }, 'mage');
-  assert.equal(q.job, 'fire');
+  assert.equal(q.job, 'war_mage');
+});
+
+test('jobs: two per class, every skill line owned by exactly one job, four starters per class', async () => {
+  const { JOBS, SKILL_TREE, JOB_OF_LINE, skillsOfClass } = await import('../public/js/skills.js');
+  for (const cls of ['swordsman', 'assassin', 'mage', 'priest']) {
+    assert.equal(JOBS[cls].length, 2, `${cls} has two jobs`);
+    const lines = SKILL_TREE[cls].map((l) => l.line);
+    for (const l of lines.filter((x) => x !== 'base')) assert.ok(JOB_OF_LINE[l], `${cls} line ${l} has a job`);
+    const starters = skillsOfClass(cls).filter((s) => s.tier === 1);
+    assert.ok(starters.length >= 4, `${cls} has at least four tier 1 skills`);
+  }
+});
+
+test('jobs: an old save that stored a skill line gets the matching job', () => {
+  const p = P.normalize({ ...P.newProgress('assassin'), job: 'wind' }, 'assassin');
+  assert.equal(p.job, 'thief');
+  const q = P.normalize({ ...P.newProgress('assassin'), job: 'shadow' }, 'assassin');
+  assert.equal(q.job, 'pro_assassin');
 });

@@ -12,26 +12,39 @@ export const JOB_LEVEL = 20;
 // mods: atkPct / hpPct / mpPct are percentages; the rest use the same keys as gear affixes.
 export const PASSIVE2_LEVEL = 25;
 export const JOB_PASSIVES = {
-  guard: [{ name: 'ใจอัศวิน', desc: 'HP สูงสุด +12%', mods: { hpPct: 12 } }, { name: 'ป้อมปราการ', desc: 'ลดคูลดาวน์ +6%', mods: { cdr: 6 } }],
-  storm: [{ name: 'ลมคลั่ง', desc: 'ดาเมจสกิล +10%', mods: { skillmg: 10 } }, { name: 'คมพายุ', desc: 'คริติคอล +5%', mods: { crit: 5 } }],
-  light: [{ name: 'แสงนำทาง', desc: 'ATK +10%', mods: { atkPct: 10 } }, { name: 'พรแห่งแสง', desc: 'EXP +10%', mods: { exp: 10 } }],
-  shadow: [{ name: 'เงาหลบ', desc: 'คริติคอล +8%', mods: { crit: 8 } }, { name: 'ลอบสังหาร', desc: 'ดาเมจคริติคอล +20%', mods: { critdmg: 20 } }],
-  poison: [{ name: 'พิษสะสม', desc: 'ดาเมจสกิล +12%', mods: { skillmg: 12 } }, { name: 'ชีพจรพิษ', desc: 'MP สูงสุด +15%', mods: { mpPct: 15 } }],
-  wind: [{ name: 'ฝีเท้าลม', desc: 'ลดคูลดาวน์ +8%', mods: { cdr: 8 } }, { name: 'คมลมเวทย์', desc: 'ATK +12%', mods: { atkPct: 12 } }],
-  fire: [{ name: 'ไฟลุกโชน', desc: 'ดาเมจสกิล +14%', mods: { skillmg: 14 } }, { name: 'ร่างเพลิง', desc: 'ATK +8%', mods: { atkPct: 8 } }],
-  ice: [{ name: 'ความเย็นกัดกร่อน', desc: 'MP สูงสุด +20%', mods: { mpPct: 20 } }, { name: 'เกราะน้ำแข็ง', desc: 'HP สูงสุด +10%', mods: { hpPct: 10 } }],
-  thunder: [{ name: 'สายฟ้าสะท้อน', desc: 'คริติคอล +10%', mods: { crit: 10 } }, { name: 'พายุไฟฟ้า', desc: 'ดาเมจคริติคอล +25%', mods: { critdmg: 25 } }],
-  holy: [{ name: 'ศรัทธา', desc: 'HP สูงสุด +15%', mods: { hpPct: 15 } }, { name: 'ฟื้นฟูแห่งพระ', desc: 'ลดคูลดาวน์ +10%', mods: { cdr: 10 } }],
-  mend: [{ name: 'ฟื้นฟูต่อเนื่อง', desc: 'EXP +15%', mods: { exp: 15 } }, { name: 'มือทอง', desc: 'เหรียญ +20%', mods: { gold: 20 } }],
-  support: [{ name: 'ผู้นำทาง', desc: 'เหรียญ +15%', mods: { gold: 15 } }, { name: 'ผู้นำทัพ', desc: 'MP สูงสุด +10%', mods: { mpPct: 10 } }],
+  knight_shield: [{ name: 'ใจอัศวิน', desc: 'HP สูงสุด +12%', mods: { hpPct: 12 } }, { name: 'ป้อมปราการ', desc: 'ลดคูลดาวน์ +6%', mods: { cdr: 6 } }],
+  knight_great: [{ name: 'ลมคลั่ง', desc: 'ดาเมจสกิล +10%', mods: { skillmg: 10 } }, { name: 'คมพายุ', desc: 'คริติคอล +5%', mods: { crit: 5 } }],
+  pro_assassin: [{ name: 'เงาหลบ', desc: 'คริติคอล +8%', mods: { crit: 8 } }, { name: 'ลอบสังหาร', desc: 'ดาเมจคริติคอล +20%', mods: { critdmg: 20 } }],
+  thief: [{ name: 'ฝีเท้าลม', desc: 'ลดคูลดาวน์ +8%', mods: { cdr: 8 } }, { name: 'คมลมเวทย์', desc: 'ATK +12%', mods: { atkPct: 12 } }],
+  war_mage: [{ name: 'ไฟลุกโชน', desc: 'ดาเมจสกิล +14%', mods: { skillmg: 14 } }, { name: 'ร่างเพลิง', desc: 'ATK +8%', mods: { atkPct: 8 } }],
+  frost_mage: [{ name: 'ความเย็นกัดกร่อน', desc: 'MP สูงสุด +20%', mods: { mpPct: 20 } }, { name: 'เกราะน้ำแข็ง', desc: 'HP สูงสุด +10%', mods: { hpPct: 10 } }],
+  holy_priest: [{ name: 'ศรัทธา', desc: 'HP สูงสุด +15%', mods: { hpPct: 15 } }, { name: 'ฟื้นฟูแห่งพระ', desc: 'ลดคูลดาวน์ +10%', mods: { cdr: 10 } }],
+  light_healer: [{ name: 'ฟื้นฟูต่อเนื่อง', desc: 'EXP +15%', mods: { exp: 15 } }, { name: 'มือทอง', desc: 'เหรียญ +20%', mods: { gold: 20 } }],
 };
 
-export const JOB_NAMES = {
-  guard: 'อัศวินพิทักษ์', storm: 'นักรบพายุ', light: 'ดาบศักดิ์สิทธิ์',
-  shadow: 'นักฆ่าเงา', poison: 'พิษาจารย์', wind: 'นินจาสายลม',
-  fire: 'จอมเวทเพลิง', ice: 'จอมเวทน้ำแข็ง', thunder: 'จอมเวทสายฟ้า',
-  holy: 'นักบวชศักดิ์สิทธิ์', mend: 'ผู้รักษาแสง', support: 'ผู้นำทางกล้าหาญ',
+// Advanced jobs: each class has two. A job owns one or more skill lines; tier 2-4 skills need their job.
+// Tier 1 skills stay open to everyone.
+export const JOBS = {
+  swordsman: [
+    { id: 'knight_great', name: 'นักดาบใหญ่', lines: ['storm', 'light'] },
+    { id: 'knight_shield', name: 'นักดาบโล่', lines: ['guard'] },
+  ],
+  assassin: [
+    { id: 'pro_assassin', name: 'นักฆ่ามืออาชีพ', lines: ['shadow', 'poison'] },
+    { id: 'thief', name: 'โจร', lines: ['wind'] },
+  ],
+  mage: [
+    { id: 'war_mage', name: 'จอมเวทโจมตี', lines: ['fire', 'thunder'] },
+    { id: 'frost_mage', name: 'จอมเวทน้ำแข็ง', lines: ['ice'] },
+  ],
+  priest: [
+    { id: 'holy_priest', name: 'นักบวชศักดิ์สิทธิ์', lines: ['holy'] },
+    { id: 'light_healer', name: 'ผู้รักษาแสง', lines: ['mend', 'support'] },
+  ],
 };
+export const JOB_NAMES = Object.fromEntries(Object.values(JOBS).flat().map((j) => [j.id, j.name]));
+export const JOB_OF_LINE = Object.fromEntries(Object.values(JOBS).flat().flatMap((j) => j.lines.map((l) => [l, j.id])));
+export const JOB_IDS_OF_CLASS = Object.fromEntries(Object.entries(JOBS).map(([c, list]) => [c, list.map((j) => j.id)]));
 
 const fx = (type, color, color2, o = {}) => ({ type, color, color2, count: 24, size: 7, duration: 500, speed: 200, shake: 2, ...o });
 
@@ -63,6 +76,7 @@ const TREE = {
       sk('swordsman', 'light', 'ดาบแสง', 3, 'sw_l3', 'เสาแสง', 'holy', { mult: 2.2, range: 180, cd: 7000, mp: 18, fx: fx('pillar', '#fff3a3', '#ffffff', { size: 12, duration: 700, shake: 4 }) }),
       sk('swordsman', 'light', 'ดาบแสง', 4, 'sw_l4', 'พระเจ้าแห่งดาบ', 'star', { mult: 3.5, range: 240, aoe: true, cd: 16000, mp: 35, fx: fx('meteor', '#fff3a3', '#ffffff', { size: 12, duration: 800, shake: 9 }) }),
     ] },
+    { line: 'base', name: 'พื้นฐาน', tiers: [sk('swordsman', 'base', 'พื้นฐาน', 1, 'sw_b1', 'ท่าตั้งหลัก', 'sword', { mult: 0.9, cd: 800, mp: 3, range: 110, fx: fx('slash', '#ffffff', '#dfe9f5', { size: 55 }) })] },
   ],
   assassin: [
     { line: 'shadow', name: 'เงาสังหาร', tiers: [
@@ -83,6 +97,7 @@ const TREE = {
       sk('assassin', 'wind', 'สายลม', 3, 'as_w3', 'วายุวน', 'whirl', { mult: 2.1, range: 160, aoe: true, cd: 8000, mp: 16, fx: fx('blades', '#5ee7ff', '#ffffff', { size: 85, duration: 650 }) }),
       sk('assassin', 'wind', 'สายลม', 4, 'as_w4', 'ลมกรรโชก', 'wave', { mult: 3.0, range: 260, aoe: true, cd: 15000, mp: 30, fx: fx('wave', '#5ee7ff', '#ffffff', { size: 14, duration: 700, shake: 7 }) }),
     ] },
+    { line: 'base', name: 'พื้นฐาน', tiers: [sk('assassin', 'base', 'พื้นฐาน', 1, 'as_b1', 'ย่องเงา', 'dagger', { mult: 0.9, cd: 800, mp: 3, range: 100, fx: fx('slash', '#9b8cff', '#2c3e50', { size: 50, duration: 200 }) })] },
   ],
   mage: [
     { line: 'fire', name: 'เพลิง', tiers: [
@@ -103,6 +118,7 @@ const TREE = {
       sk('mage', 'thunder', 'สายฟ้า', 3, 'mg_t3', 'พายุไฟฟ้า', 'bolt', { mult: 2.2, range: 220, aoe: true, cd: 8000, mp: 20, fx: fx('lightning', '#ffe066', '#7fd8ff', { size: 12, duration: 600, shake: 7 }) }),
       sk('mage', 'thunder', 'สายฟ้า', 4, 'mg_t4', 'เทพอสนี', 'bolt', { mult: 3.4, range: 240, cd: 16000, mp: 36, fx: fx('pillar', '#ffe066', '#ffffff', { size: 14, duration: 800, shake: 10 }) }),
     ] },
+    { line: 'base', name: 'พื้นฐาน', tiers: [sk('mage', 'base', 'พื้นฐาน', 1, 'mg_b1', 'ประกายเวทย์', 'book', { mult: 0.9, cd: 900, mp: 4, range: 160, fx: fx('projectile', '#8fd8ff', '#ffffff', { size: 8 }) })] },
   ],
   priest: [
     { line: 'holy', name: 'แสงศักดิ์สิทธิ์', tiers: [
@@ -123,6 +139,7 @@ const TREE = {
       sk('priest', 'support', 'ค้ำจุน', 3, 'pr_s3', 'คลื่นศักดิ์สิทธิ์', 'sparkle', { mult: 1.8, range: 190, aoe: true, cd: 7000, mp: 16, fx: fx('wave', '#ffd166', '#ffffff', { size: 12 }) }),
       sk('priest', 'support', 'ค้ำจุน', 4, 'pr_s4', 'ปาฏิหาริย์', 'star', { mult: 2.8, range: 220, aoe: true, cd: 16000, mp: 30, fx: fx('pillar', '#ffd166', '#fff3a3', { size: 13, duration: 800, shake: 8 }) }),
     ] },
+    { line: 'base', name: 'พื้นฐาน', tiers: [sk('priest', 'base', 'พื้นฐาน', 1, 'pr_b1', 'แสงนำทาง', 'holy', { heal: 0.12, cd: 7000, mp: 8, range: 0, fx: fx('heal', '#7dff9b', '#ffffff', { size: 12, duration: 700 }) })] },
   ],
 };
 

@@ -1,5 +1,5 @@
 import { MATERIALS, GEAR, AFFIXES, GRADES, BANDS, GEAR_SLOTS, CRAFT_WEIGHTS, ENH_RATE, MAX_ENH, ENH_DOWN_FROM, MAPS, QUESTS, ITEMS, RUNE_IDS, DUNGEONS, SPIRIT_RARITY, SPIRIT_PASSIVES } from './data.js';
-import { SKILL_BY_ID, BUILTIN_SKILLS, MAX_RANK, skillsOfClass, SKILL_TREE, JOB_LEVEL, JOB_NAMES, JOB_PASSIVES, PASSIVE2_LEVEL } from './skills.js';
+import { SKILL_BY_ID, BUILTIN_SKILLS, MAX_RANK, skillsOfClass, JOB_LEVEL, JOB_NAMES, JOB_PASSIVES, JOB_OF_LINE, JOB_IDS_OF_CLASS, PASSIVE2_LEVEL } from './skills.js';
 
 // Pure progression rules (no DOM, no three.js), so they can be unit tested.
 // Save format v4: gear has level bands, six grades and seven equipment slots.
@@ -99,7 +99,7 @@ export function normalize(raw, classId = 'swordsman') {
     mats, gear, equip, skills, hotbar, quests,
     map: MAPS[p.map] && !MAPS[p.map].hidden ? p.map : 'town',
     pos: validPos(p.pos),
-    job: jobLinesOf(classId).includes(p.job) ? p.job : null,
+    job: migrateJob(p.job, classId),
     vip: p.vip === true,
     dungeon: normalizeDungeon(p.dungeon),
     spirits: normalizeSpirits(p.spirits),
@@ -478,8 +478,9 @@ export function canLearn(p, skillId) {
 export function skillJobLock(p, skillId) {
   const skill = SKILL_BY_ID[skillId];
   if (!skill || !skill.tier || skill.tier === 1) return null;
-  if (p.job === skill.line) return null;
-  return `ต้องเป็น${JOB_NAMES[skill.line]} ก่อน`;
+  const owner = JOB_OF_LINE[skill.line];
+  if (!owner || p.job === owner) return null;
+  return `ต้องเป็น${JOB_NAMES[owner]} ก่อน`;
 }
 
 // A skill can be cast when it is learned and its job (if any) is held.
@@ -487,17 +488,23 @@ export function skillUsable(p, skillId) {
   return !!p.skills[skillId] && !skillJobLock(p, skillId);
 }
 
-// The lines a class can choose from as its first job.
-export function jobLinesOf(classId) {
-  return (SKILL_TREE[classId] || []).map((l) => l.line);
+// The two jobs a class can become at JOB_LEVEL.
+export function jobsOfClass(classId) {
+  return JOB_IDS_OF_CLASS[classId] || [];
+}
+
+// Saves from before the job split stored a skill line as the job. Map it to its job when it belongs to the class.
+function migrateJob(job, classId) {
+  const id = JOB_NAMES[job] ? job : JOB_OF_LINE[job];
+  return jobsOfClass(classId).includes(id) ? id : null;
 }
 
 // Picks the first job. Returns an error message, or null when it worked.
-export function chooseJob(p, line, classId) {
+export function chooseJob(p, jobId, classId) {
   if (p.job) return 'เลือกอาชีพไปแล้ว เปลี่ยนไม่ได้';
   if (p.level < JOB_LEVEL) return `ต้องถึงเลเวล ${JOB_LEVEL} ก่อน`;
-  if (!jobLinesOf(classId).includes(line)) return 'อาชีพนี้ไม่ใช่ของคลาสของคุณ';
-  p.job = line;
+  if (!jobsOfClass(classId).includes(jobId)) return 'อาชีพนี้ไม่ใช่ของคลาสของคุณ';
+  p.job = jobId;
   return null;
 }
 

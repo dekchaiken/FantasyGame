@@ -169,10 +169,10 @@ export const Game = {
 
   // Skills on the hotbar, with their ranks. Empty slots are null.
   // Changes the hero's job once, at JOB_LEVEL or above.
-  chooseJob(line) {
-    const err = P.chooseJob(this.p, line, this.character.classId);
+  chooseJob(jobId) {
+    const err = P.chooseJob(this.p, jobId, this.character.classId);
     if (err) { Hud.toast(err, 'warn'); Sfx.play('error'); return; }
-    Hud.toast(`เปลี่ยนอาชีพเป็น ${JOB_NAMES[line]}!`, 'gold');
+    Hud.toast(`เปลี่ยนอาชีพเป็น ${JOB_NAMES[jobId]}!`, 'gold');
     Sfx.play('learn');
     this.aura(CLASSES[this.character.classId].color, 2.4);
     this.dirty = true;

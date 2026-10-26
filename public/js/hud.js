@@ -1,7 +1,7 @@
 import { icon } from './icons.js';
 import { CLASSES, HUD_MENUS } from './config.js';
 import { MAPS, NPCS, QUESTS, MATERIALS, GEAR, RARITY, MAX_ENH, ENH_DOWN_FROM, DUNGEONS, TOWER } from './data.js';
-import { SKILL_TREE, TIER_LEVEL, MAX_RANK, JOB_LEVEL, JOB_NAMES, PASSIVE2_LEVEL, rankMult, rankCooldown } from './skills.js';
+import { SKILL_TREE, TIER_LEVEL, MAX_RANK, JOB_LEVEL, JOB_NAMES, JOBS, PASSIVE2_LEVEL, rankMult, rankCooldown } from './skills.js';
 import * as DG from './dungeon.js';
 import { SPIRIT_RARITY, SPIRIT_PASSIVES } from './data.js';
 import { Sfx } from './sfx.js';
@@ -90,7 +90,7 @@ export const Hud = {
           break;
         }
         case 'craft': g.craft(d.line, Number(d.band)); break;
-        case 'job': g.chooseJob(d.line); break;
+        case 'job': g.chooseJob(d.job); break;
         case 'summon': g.summonSpirit(d.id); break;
         case 'equip-spirit': g.equipSpirit(d.uid || null); break;
         case 'dungeon': this.close(); g.enterDungeon(d.id); break;
@@ -853,17 +853,19 @@ function jobTagHtml(p) {
     : `<span class="job-tag off">ยังไม่มีอาชีพขั้นที่ 1 (เลเวล ${JOB_LEVEL})</span>`;
 }
 
-// Job master window: shows the first-job choice at JOB_LEVEL.
+// Job master window: at JOB_LEVEL pick one of the class's two jobs. Each job shows the skills it unlocks.
 function jobHtml(g) {
   const p = g.p;
   if (p.job) return `<div class="job-note">อาชีพปัจจุบันของคุณคือ <b>${esc(JOB_NAMES[p.job])}</b> สกิลของอาชีพอื่นจะใช้ไม่ได้</div>`;
-  if (p.level < JOB_LEVEL) return `<div class="job-note">กลับมาหาข้าเมื่อถึงเลเวล ${JOB_LEVEL} เพื่อเลือกอาชีพขั้นที่ 1 (เลือกได้ครั้งเดียว)</div>`;
-  const lines = SKILL_TREE[g.character.classId] || [];
-  return `<div class="sub-title">${icon('star')} เลือกอาชีพขั้นที่ 1</div><div class="job-list">${lines.map((l, i) => `
+  if (p.level < JOB_LEVEL) return `<div class="job-note">กลับมาหาข้าเมื่อถึงเลเวล ${JOB_LEVEL} เพื่อเลือกอาชีพขั้นที่ 2 (เลือกได้ครั้งเดียว)</div>`;
+  const cls = g.character.classId;
+  const lineByID = Object.fromEntries((SKILL_TREE[cls] || []).map((l) => [l.line, l]));
+  return `<div class="sub-title">${icon('star')} เลือกอาชีพขั้นที่ 2</div><div class="job-list">${(JOBS[cls] || []).map((job, i) => `
     <div class="job-card" style="--lc:${LINE_COLORS[i]}">
-      <b>${esc(JOB_NAMES[l.line])}</b>
-      <small>สาย${esc(l.name)} · ${l.tiers.map((s) => esc(s.name)).join(' · ')}</small>
-      <button class="btn-primary sm" data-act="job" data-line="${l.line}">เลือกอาชีพนี้</button>
+      <b>${esc(job.name)}</b>
+      <small>สาย${job.lines.map((l) => esc(lineByID[l]?.name || l)).join(' + ')}</small>
+      <ul class="job-skills">${job.lines.flatMap((l) => (lineByID[l]?.tiers || []).map((s) => `<li>${esc(s.name)} <em>Lv ${s.reqLv}</em></li>`)).join('')}</ul>
+      <button class="btn-primary sm" data-act="job" data-job="${job.id}">เลือกอาชีพนี้</button>
     </div>`).join('')}</div>`;
 }
 
