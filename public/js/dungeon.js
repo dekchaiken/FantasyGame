@@ -57,6 +57,12 @@ export function farmReward(id, rng = Math.random) {
   };
 }
 
+// A spirit orb whose rarity grows with the floor.
+function spiritOrbFor(floor, rng) {
+  const tier = floor < 30 ? 'common' : floor < 60 ? 'rare' : floor < 85 ? 'epic' : 'legendary';
+  return rng() < 0.1 && floor >= 85 ? 'spirit_orb_mythic' : `spirit_orb_${tier}`;
+}
+
 // Rewards for one cleared tower floor. Boss floors always drop gear and one extra rune.
 export function towerReward(floor, rng = Math.random) {
   const boss = floor % 10 === 0;
@@ -68,6 +74,7 @@ export function towerReward(floor, rng = Math.random) {
     mats: [
       ...(rng() < 0.4 + floor / 200 ? [['enh_stone', 1 + (floor >= 50 ? 1 : 0)]] : []),
       ...(rng() < 0.2 + floor / 300 ? [['crystal_ore', 1]] : []),
+      ...(rng() < 0.03 + floor / 250 ? [[spiritOrbFor(floor, rng), 1]] : []),
     ],
     gear: boss || rng() < 0.25 + floor / 200 ? 1 : 0,
     runes,

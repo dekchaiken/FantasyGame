@@ -53,6 +53,33 @@ for (const [k, kind] of Object.entries(RUNE_KINDS)) {
 }
 export const RUNE_IDS = Object.keys(MATERIALS).filter((id) => MATERIALS[id].cat === 'rune');
 
+
+// Spirits (ภูติ): companions that give stats and passives. Each rarity is a spirit orb item.
+// passives: how many passives a spirit of this rarity gets. rainbow: the orb cycles through colours.
+export const SPIRIT_RARITY = [
+  { id: 'common', name: 'ธรรมดา', color: '#cfd8e8', atkPct: 3, hp: 40, passives: 1 },
+  { id: 'rare', name: 'หายาก', color: '#4fa3ff', atkPct: 6, hp: 90, passives: 1 },
+  { id: 'epic', name: 'มหากาพย์', color: '#b77bff', atkPct: 10, hp: 170, passives: 2 },
+  { id: 'legendary', name: 'ตำนาน', color: '#ffb84d', atkPct: 15, hp: 280, passives: 2 },
+  { id: 'mythic', name: 'เทพปกรณัม', color: '#ff5d73', atkPct: 22, hp: 450, passives: 3, rainbow: true },
+];
+export const SPIRIT_PASSIVES = [
+  { id: 'sp_crit', name: 'ตาเหยี่ยว', desc: 'คริติคอล +4%', mods: { crit: 4 } },
+  { id: 'sp_cdmg', name: 'คมแสง', desc: 'ดาเมจคริติคอล +12%', mods: { critdmg: 12 } },
+  { id: 'sp_skill', name: 'ประกายเวทย์', desc: 'ดาเมจสกิล +8%', mods: { skillmg: 8 } },
+  { id: 'sp_cdr', name: 'นาฬิกาดาว', desc: 'ลดคูลดาวน์ +5%', mods: { cdr: 5 } },
+  { id: 'sp_mp', name: 'บ่อปราณ', desc: 'MP สูงสุด +12%', mods: { mpPct: 12 } },
+  { id: 'sp_hp', name: 'ผิวหินกึ่งชีวิต', desc: 'HP สูงสุด +10%', mods: { hpPct: 10 } },
+  { id: 'sp_gold', name: 'เสน่ห์เหรียญ', desc: 'เหรียญ +12%', mods: { gold: 12 } },
+  { id: 'sp_exp', name: 'ดวงตาปัญญา', desc: 'EXP +10%', mods: { exp: 10 } },
+];
+for (const r of SPIRIT_RARITY) {
+  MATERIALS[`spirit_orb_${r.id}`] = {
+    name: `ลูกแก้วภูติ${r.name}`, type: 'spirit', rarity: r.id === 'mythic' ? 'legendary' : r.id, icon: 'gem', price: 0,
+    cat: 'spirit', spirit: r.id,
+  };
+}
+
 export const GRADES = [
   { name: 'ธรรมดา', color: '#7b8aa8', mult: 1, opts: [0, 1], aura: null, weight: 45, epithet: '' },
   { name: 'พื้นฐาน', color: '#35b87a', mult: 1.25, opts: [1, 1], aura: '#ffffff', weight: 25, epithet: 'อย่างดี' },
@@ -145,6 +172,21 @@ export const ENH_DOWN_FROM = 7; // a failed attempt at this level or higher drop
 
 // Monster stats. drops: [itemId, chance]. gearChance: chance for a gear piece on kill.
 export const MONSTERS = {
+  mushroom: {
+    name: 'เห็ดเรืองแสง', level: 2, hp: 55, atk: 6, def: 1, exp: 22, gold: [4, 8], respawn: 10,
+    aggro: 3.5, range: 1.2, cd: 1.6, speed: 1.1, size: 0.9, shape: 'mushroom', color: '#9be36b',
+    drops: [['herb', 0.4], ['essence', 0.3], ['potion_hp', 0.1], ['enh_stone', 0.04]], gearChance: 0.02,
+  },
+  bat: {
+    name: 'ค้างคาวป่า', level: 3, hp: 60, atk: 8, def: 1, exp: 30, gold: [5, 9], respawn: 12,
+    aggro: 6, range: 1.4, cd: 1.0, speed: 3.4, size: 0.9, shape: 'bat', color: '#5b4b7a',
+    drops: [['wolf_fang', 0.25], ['herb', 0.2], ['potion_hp', 0.1], ['spirit_orb_common', 0.01]], gearChance: 0.04,
+  },
+  cave_bat: {
+    name: 'ค้างคาวถ้ำ', level: 11, hp: 240, atk: 17, def: 6, exp: 130, gold: [16, 26], respawn: 18,
+    aggro: 6.5, range: 1.5, cd: 1.0, speed: 3.6, size: 1, shape: 'bat', color: '#b77bff',
+    drops: [['crystal_ore', 0.3], ['enh_stone', 0.2], ['potion_hp', 0.15], ['spirit_orb_rare', 0.05]], gearChance: 0.1,
+  },
   slime: {
     name: 'สไลม์ใส', level: 1, hp: 40, atk: 5, def: 0, exp: 14, gold: [3, 6], respawn: 10,
     aggro: 4.5, range: 1.3, cd: 1.4, speed: 1.7, size: 1, shape: 'slime', color: '#5ee7ff',
@@ -168,17 +210,17 @@ export const MONSTERS = {
   frost_golem: {
     name: 'โกเลมน้ำแข็ง', level: 14, hp: 460, atk: 28, def: 14, exp: 210, gold: [28, 44], respawn: 26,
     aggro: 7, range: 2.0, cd: 1.9, speed: 1.5, size: 1.5, shape: 'golem', color: '#8fe3ff',
-    drops: [['crystal_ore', 0.8], ['potion_hp', 0.3], ['enh_stone', 0.4]], gearChance: 0.22,
+    drops: [['crystal_ore', 0.8], ['potion_hp', 0.3], ['enh_stone', 0.4], ['spirit_orb_rare', 0.03]], gearChance: 0.22,
   },
   gold_golem: {
     name: 'โกเลมทองคำ', level: 22, hp: 760, atk: 40, def: 22, exp: 360, gold: [45, 70], respawn: 30,
     aggro: 7.5, range: 2.1, cd: 1.8, speed: 1.6, size: 1.6, shape: 'golem', color: '#ffd166',
-    drops: [['crystal_ore', 0.9], ['potion_hp', 0.35], ['enh_stone', 0.5]], gearChance: 0.28,
+    drops: [['crystal_ore', 0.9], ['potion_hp', 0.35], ['enh_stone', 0.5], ['spirit_orb_epic', 0.03]], gearChance: 0.28,
   },
   tower_boss: {
     name: 'ผู้พิทักษ์หอคอย', level: 10, hp: 900, atk: 30, def: 12, exp: 300, gold: [60, 90], respawn: 9999,
     aggro: 8, range: 2.4, cd: 1.6, speed: 1.8, size: 2.2, shape: 'golem', color: '#c084fc',
-    drops: [['crystal_ore', 1], ['enh_stone', 1]], gearChance: 1,
+    drops: [['crystal_ore', 1], ['enh_stone', 1], ['spirit_orb_legendary', 0.5]], gearChance: 1,
   },
   golem: {
     name: 'โกเลมลาวา', level: 9, hp: 280, atk: 19, def: 9, exp: 110, gold: [18, 30], respawn: 24,
@@ -191,20 +233,35 @@ export const MONSTERS = {
 export const MAPS = {
   town: { name: 'ดินแดนสวรรค์', levelText: 'เมืองหลัก', minLevel: 1, safe: true, sky: '#bfe9ff' },
   forest: {
-    name: 'ป่าวิญญาณ', levelText: 'เลเวล 1-5', minLevel: 1, size: 36, biome: 'forest', sky: '#c8f0e0',
-    spawns: [['slime', 9], ['wolf', 4]],
+    name: 'ป่าวิญญาณ', levelText: 'เลเวล 1-5', minLevel: 1, size: 56, biome: 'forest', sky: '#c8f0e0',
+    zones: [
+      { name: 'ทุ่งเห็ดเรืองแสง', x: -18, z: -14, r: 8, mons: [['mushroom', 5]] },
+      { name: 'ลานสไลม์', x: 12, z: -8, r: 9, mons: [['slime', 6]] },
+      { name: 'ป่าทึบ', x: 16, z: 14, r: 9, mons: [['wolf', 3], ['bat', 3]] },
+      { name: 'ริมธาร', x: -16, z: 14, r: 7, mons: [['slime', 4]] },
+    ],
   },
   meadow: {
-    name: 'ทุ่งแสงทอง', levelText: 'เลเวล 5-10', minLevel: 5, size: 36, biome: 'meadow', sky: '#fff0c2',
-    spawns: [['fire_slime', 8], ['wild_wolf', 4]],
+    name: 'ทุ่งแสงทอง', levelText: 'เลเวล 5-10', minLevel: 5, size: 56, biome: 'meadow', sky: '#fff0c2',
+    zones: [
+      { name: 'ทุ่งกกทอง', x: -16, z: 0, r: 9, mons: [['wild_wolf', 4]] },
+      { name: 'บ่อน้ำพุร้อน', x: 14, z: -12, r: 7, mons: [['fire_slime', 6]] },
+      { name: 'เนินหญ้าใต้', x: 10, z: 14, r: 8, mons: [['wild_wolf', 2], ['fire_slime', 3], ['mushroom', 2]] },
+    ],
   },
   mine: {
-    name: 'เหมืองลาวาร้อน', levelText: 'เลเวล 10-20', minLevel: 10, size: 36, biome: 'mine', sky: '#3a1d1d',
-    spawns: [['golem', 4], ['frost_golem', 4]],
+    name: 'เหมืองลาวาร้อน', levelText: 'เลเวล 10-20', minLevel: 10, size: 56, biome: 'mine', sky: '#3a1d1d',
+    zones: [
+      { name: 'ปล่องลาวา', x: -16, z: -12, r: 9, mons: [['golem', 4]] },
+      { name: 'โพรงน้ำแข็ง', x: 16, z: 10, r: 8, mons: [['frost_golem', 4], ['cave_bat', 3]] },
+    ],
   },
   ruin: {
-    name: 'ซากปรักสวรรค์', levelText: 'เลเวล 20-30', minLevel: 20, size: 36, biome: 'ruin', sky: '#e8dcff',
-    spawns: [['gold_golem', 6], ['frost_golem', 2]],
+    name: 'ซากปรักสวรรค์', levelText: 'เลเวล 20-30', minLevel: 20, size: 56, biome: 'ruin', sky: '#e8dcff',
+    zones: [
+      { name: 'ลานซากเทพ', x: -14, z: -12, r: 9, mons: [['gold_golem', 3]] },
+      { name: 'ศาลาร้าง', x: 14, z: 12, r: 8, mons: [['frost_golem', 2], ['cave_bat', 4]] },
+    ],
   },
   dungeon: { name: 'ดันเจี้ยน', levelText: '', minLevel: 1, size: 36, biome: 'dungeon', sky: '#2a2440', spawns: [], hidden: true },
 };
@@ -225,7 +282,7 @@ export const DUNGEONS = {
   relic_cave: {
     name: 'ถ้ำอาวุธโบราณ', desc: 'ของสวมใส่และอาวุธจากยุคเก่า', minLevel: 12, daily: 3,
     waves: [[['wild_wolf', 4], ['fire_slime', 4]], [['frost_golem', 3]], [['gold_golem', 2]]],
-    reward: { gold: [80, 120], exp: 600, loot: [['wolf_fang', 0.9, 2]], gearChance: 1 },
+    reward: { gold: [80, 120], exp: 600, loot: [['wolf_fang', 0.9, 2], ['spirit_orb_common', 0.25, 1]], gearChance: 1 },
   },
   rune_shrine: {
     name: 'ศาลาหินรูน', desc: 'ศาลาโบราณที่ซ่อนรูนไว้ เข้าได้วันละ 2 ครั้ง', minLevel: 15, daily: 2,
@@ -238,7 +295,6 @@ export const DUNGEONS = {
 export const TOWER = {
   name: 'หอคอยแห่งสวรรค์', minLevel: 15, floors: 100,
   desc: 'ขึ้นชั้นทีละชั้น บอสทุก 10 ชั้น ชั้นที่ผ่านแล้วได้รางวัลทันที',
-  dungeon: { name: 'ดันเจี้ยน', levelText: '', minLevel: 1, size: 36, biome: 'dungeon', sky: '#2a2440', spawns: [], hidden: true },
 };
 
 // Portals: walk into one to travel. `arrive` is where you appear on the destination map.
@@ -246,18 +302,18 @@ export const PORTALS = {
   dungeon: [{ x: 0, z: -16.5, to: 'town', arrive: [2, -12], label: 'ออกจากดันเจี้ยน' }],
   town: [{ x: 0, z: -17.5, to: 'forest', arrive: [0, -13], label: 'ป่าวิญญาณ' }],
   forest: [
-    { x: 0, z: -16.5, to: 'town', arrive: [0, -14], label: 'ดินแดนสวรรค์' },
-    { x: 16.5, z: 0, to: 'meadow', arrive: [-13, 0], label: 'ทุ่งแสงทอง' },
+    { x: 0, z: -24, to: 'town', arrive: [0, -14], label: 'ดินแดนสวรรค์' },
+    { x: 24, z: 0, to: 'meadow', arrive: [-21, 0], label: 'ทุ่งแสงทอง' },
   ],
   meadow: [
-    { x: -16.5, z: 0, to: 'forest', arrive: [13, 0], label: 'ป่าวิญญาณ' },
-    { x: 16.5, z: 0, to: 'mine', arrive: [-13, 0], label: 'เหมืองลาวาร้อน' },
+    { x: -24, z: 0, to: 'forest', arrive: [21, 0], label: 'ป่าวิญญาณ' },
+    { x: 24, z: 0, to: 'mine', arrive: [-21, 0], label: 'เหมืองลาวาร้อน' },
   ],
   mine: [
-    { x: -16.5, z: 0, to: 'meadow', arrive: [13, 0], label: 'ทุ่งแสงทอง' },
-    { x: 16.5, z: 0, to: 'ruin', arrive: [-13, 0], label: 'ซากปรักสวรรค์' },
+    { x: -24, z: 0, to: 'meadow', arrive: [21, 0], label: 'ทุ่งแสงทอง' },
+    { x: 24, z: 0, to: 'ruin', arrive: [-21, 0], label: 'ซากปรักสวรรค์' },
   ],
-  ruin: [{ x: -16.5, z: 0, to: 'mine', arrive: [13, 0], label: 'เหมืองลาวาร้อน' }],
+  ruin: [{ x: -24, z: 0, to: 'mine', arrive: [21, 0], label: 'เหมืองลาวาร้อน' }],
 };
 
 export const NPCS = {

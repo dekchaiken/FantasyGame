@@ -3,6 +3,7 @@ import { CLASSES, HUD_MENUS } from './config.js';
 import { MAPS, NPCS, QUESTS, MATERIALS, GEAR, RARITY, MAX_ENH, ENH_DOWN_FROM, DUNGEONS, TOWER } from './data.js';
 import { SKILL_TREE, TIER_LEVEL, MAX_RANK, JOB_LEVEL, JOB_NAMES, PASSIVE2_LEVEL, rankMult, rankCooldown } from './skills.js';
 import * as DG from './dungeon.js';
+import { SPIRIT_RARITY, SPIRIT_PASSIVES } from './data.js';
 import { Sfx } from './sfx.js';
 import * as P from './progress.js';
 import { drawThumb } from './thumb.js';
@@ -89,6 +90,8 @@ export const Hud = {
         }
         case 'craft': g.craft(d.line, Number(d.band)); break;
         case 'job': g.chooseJob(d.line); break;
+        case 'summon': g.summonSpirit(d.id); break;
+        case 'equip-spirit': g.equipSpirit(d.uid || null); break;
         case 'dungeon': this.close(); g.enterDungeon(d.id); break;
         case 'socket': g.socketRune(d.uid, d.rune); break;
         case 'unsocket': g.unsocketRune(d.uid, Number(d.index)); break;
@@ -436,6 +439,7 @@ const CATS = [
   { id: 'upgrade', label: 'อัปเกรด', icon: 'gem' },
   { id: 'potion', label: 'ยา', icon: 'potion' },
   { id: 'rune', label: 'รูน', icon: 'gem' },
+  { id: 'spirit', label: 'ภูติ', icon: 'star' },
 ];
 const ARMOR_SLOT_CATS = ['hat', 'shirt', 'pants', 'shoes'];
 const ACC_SLOT_CATS = ['ring', 'bracelet'];
@@ -448,8 +452,10 @@ function itemsInCat(g, cat) {
   if (cat === 'weapon') return p.gear.filter((x) => GEAR[x.base].slot === 'weapon').map((x) => ({ key: x.uid, gear: x }));
   if (cat === 'armor') return p.gear.filter((x) => ARMOR_SLOT_CATS.includes(GEAR[x.base].slot)).map((x) => ({ key: x.uid, gear: x }));
   if (cat === 'acc') return p.gear.filter((x) => ACC_SLOT_CATS.includes(GEAR[x.base].slot)).map((x) => ({ key: x.uid, gear: x }));
-  const mat = { quest: 'quest', craft: 'craft', upgrade: 'upgrade', potion: 'potion', rune: 'rune' }[cat];
-  return Object.entries(p.mats).filter(([id]) => MATERIALS[id].cat === mat).map(([id, n]) => ({ key: 'mat:' + id, mat: id, count: n }));
+  const mat = { quest: 'quest', craft: 'craft', upgrade: 'upgrade', potion: 'potion', rune: 'rune', spirit: 'spirit' }[cat];
+  const orbs = Object.entries(p.mats).filter(([id]) => MATERIALS[id].cat === mat).map(([id, n]) => ({ key: 'mat:' + id, mat: id, count: n }));
+  if (cat !== 'spirit') return orbs;
+  return [...(p.spirits || []).map((s) => ({ key: 'sp:' + s.uid, spirit: s })), ...orbs];
 }
 
 function bagHtml(g, hud) {
@@ -479,6 +485,11 @@ function bagHtml(g, hud) {
         <span class="bi-lv" style="--bc:${bandColor(base.level)}">Lv${base.level}</span>
         <span class="bi-ico">${icon(base.icon)}</span>${it.gear.enh ? `<em>+${it.gear.enh}</em>` : ''}${eq ? '<i class="eq-dot"></i>' : ''}<small>${esc(base.name)}</small></button>`;
     }
+    if (it.spirit) {
+      const r = SPIRIT_RARITY.find((x) => x.id === it.spirit.rarity);
+      return `<button class="bag-item spirit${sel === it.key ? ' sel' : ''}${p.spirit === it.spirit.uid ? ' eq' : ''}" style="--gc:${r.color}" data-act="select" data-uid="${it.key}">
+        <span class="bi-lv" style="--bc:${r.color}">${r.name}</span><span class="bi-ico">${icon('star')}</span>${p.spirit === it.spirit.uid ? '<i class="eq-dot"></i>' : ''}<small>ภูติ ${it.spirit.passives.length} พาสซีพ</small></button>`;
+    }
     const m = MATERIALS[it.mat];
     return `<button class="bag-item mat${sel === it.key || runeSel === it.mat ? ' sel' : ''}" style="--gc:${RARITY[m.rarity].color}" data-act="select" data-uid="${it.key}">
       <span class="bi-ico">${icon(m.icon)}</span><b class="cnt">x${it.count}</b><small>${esc(m.name)}</small></button>`;
@@ -490,9 +501,13 @@ function bagHtml(g, hud) {
     const id = sel.slice(4);
     const m = MATERIALS[id];
     if (p.mats[id]) {
-      const act = m.type === 'potion' ? `<button class="btn-primary" data-act="use" data-id="${id}">ใช้ (+${m.heal} HP)</button>` : '';
+      const act = m.type === 'potion' ? `<button class="btn-primary" data-act="use" data-id="${id}">ใช้ (+${m.heal} HP)</button>`
+        : m.cat === 'spirit' ? `<button class="btn-primary" data-act="summon" data-id="${id}">ปลุกภูติ</button>` : '';
       detail = `<div class="detail-head"><span class="di" style="color:${RARITY[m.rarity].color}">${icon(m.icon)}</span><div><b>${esc(m.name)}</b><small>${RARITY[m.rarity].label} · จำนวน ${p.mats[id]}</small></div></div>${act}`;
     }
+  } else if (sel && sel.startsWith('sp:')) {
+    const sp = (p.spirits || []).find((s) => s.uid === sel.slice(3));
+    if (sp) detail = spiritDetail(sp, p.spirit === sp.uid);
   } else if (sel) {
     const item = P.findGear(p, sel);
     if (item) detail = gearDetail(g, item, runeSel);
@@ -623,10 +638,35 @@ function mapHtml(g) {
 function statusHtml(g) {
   const p = g.p;
   const s = g.stats;
+  const sp = P.spiritOf(p, p.spirit);
+  const spLine = sp ? `${SPIRIT_RARITY.find((r) => r.id === sp.rarity).name} · ${sp.passives.map((id) => SPIRIT_PASSIVES.find((x) => x.id === id).name).join(' · ') || 'ไม่มีพาสซีพ'}` : 'ยังไม่มีภูติ';
+  const job = p.job ? JOB_NAMES[p.job] : `ยังไม่เปลี่ยนอาชีพ (Lv ${JOB_LEVEL})`;
+  const pct = (v) => `${Math.round(v)}%`;
+  const section = (title, rows) => `<div class="sub-title">${title}</div><div class="stat-list">${rows.map(([l, v]) => statRow(l, v)).join('')}</div>`;
   return `<div class="status-head"><canvas id="status-thumb" width="180" height="180"></canvas>
-    <div><b>${esc(g.character.name)}</b><small>${CLASSES[g.character.classId].name} · เลเวล ${p.level}</small>
+    <div><b>${esc(g.character.name)}</b><small>${CLASSES[g.character.classId].name} · ${esc(job)}</small>
+    <small>เลเวล ${p.level} · ${fmt(p.gold)} เหรียญ</small>
     <div class="xp"><span style="width:${(p.exp / P.expToNext(p.level)) * 100}%"></span></div><small>${p.exp} / ${P.expToNext(p.level)} EXP</small></div></div>
-    <div class="stat-list">${statRow('พลังโจมตี', s.atk)}${statRow('ป้องกัน', s.def)}${statRow('HP สูงสุด', s.maxHp)}${statRow('MP สูงสุด', s.maxMp)}${statRow('เหรียญ', fmt(p.gold))}${statRow('แต้มสกิล', P.skillPoints(p))}</div>`;
+    ${section('การโจมตี', [['พลังโจมตี', s.atk], ['คริติคอล', pct(s.crit)], ['ดาเมจคริติคอล', pct(s.critDmg)], ['ดาเมจสกิล', `+${s.skillMg}%`], ['ลดคูลดาวน์', `${s.cdr}%`]])}
+    ${section('การป้องกันและทรัพยากร', [['ป้องกัน', s.def], ['HP สูงสุด', s.maxHp], ['MP สูงสุด', s.maxMp]])}
+    ${section('โบนัส', [['EXP ที่ได้', `+${pct((s.expMul - 1) * 100)}`], ['เหรียญที่ได้', `+${pct((s.goldMul - 1) * 100)}`]])}
+    <div class="sub-title">ภูติ</div><small class="spirit-line">${esc(spLine)}</small>
+    <div class="sub-title">พาสซีพอาชีพ</div>${passiveHtml(p)}`;
+}
+
+// Detail panel for an owned spirit: rarity, passives, and the equip button.
+function spiritDetail(sp, equipped) {
+  const r = SPIRIT_RARITY.find((x) => x.id === sp.rarity);
+  const passives = sp.passives.map((id) => {
+    const x = SPIRIT_PASSIVES.find((y) => y.id === id);
+    return `<li><b>${esc(x.name)}</b> · ${esc(x.desc)}</li>`;
+  }).join('') || '<li class="muted">ไม่มีพาสซีพ</li>';
+  const bonus = `ATK +${Math.round(r.atkPct)}% · HP +${r.hp}`;
+  return `<div class="detail-head"><span class="di" style="background:${r.color};${r.rainbow ? 'background:linear-gradient(120deg,#ff5d73,#ffb84d,#58e39a,#4fa3ff,#b77bff)' : ''}">${icon('star')}</span>
+      <div><b>ภูติ${esc(r.name)}</b><small>${bonus} · พาสซีพ ${sp.passives.length} ตัว</small><ul class="opts">${passives}</ul></div></div>
+    <div class="detail-actions">${equipped ? '<span class="tag">กำลังใช้งาน</span>'
+      : `<button class="btn-primary sm" data-act="equip-spirit" data-uid="${sp.uid}">ให้ภูติตัวนี้ติดตาม</button>`}
+      ${equipped ? '<button class="btn-ghost sm" data-act="equip-spirit" data-uid="">เลิกให้ติดตาม</button>' : ''}</div>`;
 }
 
 function npcHtml(g, npcId) {

@@ -1,4 +1,4 @@
-import { MATERIALS, GEAR, AFFIXES, GRADES, BANDS, GEAR_SLOTS, CRAFT_WEIGHTS, ENH_RATE, MAX_ENH, ENH_DOWN_FROM, MAPS, QUESTS, ITEMS, RUNE_IDS, DUNGEONS } from './data.js';
+import { MATERIALS, GEAR, AFFIXES, GRADES, BANDS, GEAR_SLOTS, CRAFT_WEIGHTS, ENH_RATE, MAX_ENH, ENH_DOWN_FROM, MAPS, QUESTS, ITEMS, RUNE_IDS, DUNGEONS, SPIRIT_RARITY, SPIRIT_PASSIVES } from './data.js';
 import { SKILL_BY_ID, BUILTIN_SKILLS, MAX_RANK, skillsOfClass, SKILL_TREE, JOB_LEVEL, JOB_NAMES, JOB_PASSIVES, PASSIVE2_LEVEL } from './skills.js';
 
 // Pure progression rules (no DOM, no three.js), so they can be unit tested.
@@ -21,6 +21,7 @@ export function newProgress(classId = 'swordsman') {
     skills: {}, hotbar: [null, null, null, null, null, null],
     quests: {}, map: 'town', pos: null, job: null, vip: false,
     dungeon: { daily: { key: '', counts: {} }, tower: 0 },
+    spirits: [], spirit: null,
   };
   const first = skillsOfClass(classId).find((s) => s.tier === 1);
   if (first) {
@@ -101,6 +102,8 @@ export function normalize(raw, classId = 'swordsman') {
     job: jobLinesOf(classId).includes(p.job) ? p.job : null,
     vip: p.vip === true,
     dungeon: normalizeDungeon(p.dungeon),
+    spirits: normalizeSpirits(p.spirits),
+    spirit: normalizeSpirits(p.spirits).some((s) => s.uid === p.spirit) ? p.spirit : null,
   };
 }
 
@@ -147,6 +150,15 @@ export function statsFor(p) {
   let wAtk = 0;
   let aDef = 0;
   let aHp = 0;
+  const sp = spiritOf(p, p.spirit);
+  if (sp) {
+    const r = SPIRIT_RARITY.find((x) => x.id === sp.rarity);
+    mods.atkPct += r.atkPct;
+    aHp += r.hp;
+    for (const id of sp.passives) {
+      for (const [k, v] of Object.entries(SPIRIT_PASSIVES.find((x) => x.id === id).mods)) mods[k] += v;
+    }
+  }
   for (const slot of GEAR_SLOTS) {
     const g = findGear(p, p.equip[slot]);
     if (!g) continue;
@@ -338,6 +350,50 @@ export function enhance(p, uid, rng = Math.random) {
     return { ok: false, result: 'down', msg: `ล้มเหลว ระดับลดเป็น +${g.enh}` };
   }
   return { ok: false, result: 'fail', msg: 'ตีบวกล้มเหลว (ไม่เสียระดับ)' };
+}
+
+// ---------- spirits (ภูติ) ----------
+export const MAX_SPIRITS = 20;
+const SPIRIT_IDS = SPIRIT_RARITY.map((r) => r.id);
+
+function normalizeSpirits(list) {
+  const out = [];
+  const seen = new Set();
+  for (const s of Array.isArray(list) ? list : []) {
+    if (!s || typeof s.uid !== 'string' || seen.has(s.uid) || !SPIRIT_IDS.includes(s.rarity)) continue;
+    const passives = (Array.isArray(s.passives) ? s.passives : []).filter((id) => SPIRIT_PASSIVES.some((x) => x.id === id));
+    seen.add(s.uid);
+    out.push({ uid: s.uid.slice(0, 20), rarity: s.rarity, passives: [...new Set(passives)].slice(0, 3) });
+  }
+  return out.slice(0, MAX_SPIRITS);
+}
+
+export function spiritOf(p, uid) {
+  return (p.spirits || []).find((s) => s.uid === uid) || null;
+}
+
+// Turns one spirit orb from the bag into a spirit. The first spirit is equipped automatically.
+export function summonSpirit(p, orbId, rng = Math.random) {
+  const rarityId = MATERIALS[orbId]?.spirit;
+  if (!rarityId) return { error: 'ไม่ใช่ลูกแก้วภูติ' };
+  if (p.spirits.length >= MAX_SPIRITS) return { error: `เก็บภูติได้สูงสุด ${MAX_SPIRITS} ตัว` };
+  if (!removeMat(p, orbId, 1)) return { error: 'ไม่มีลูกแก้วนี้ในกระเป๋า' };
+  const rarity = SPIRIT_RARITY.find((r) => r.id === rarityId);
+  const pool = SPIRIT_PASSIVES.map((x) => x.id);
+  const passives = [];
+  while (passives.length < rarity.passives && pool.length) {
+    passives.push(pool.splice(Math.floor(rng() * pool.length), 1)[0]);
+  }
+  const spirit = { uid: `s${Math.random().toString(36).slice(2, 10)}`, rarity: rarityId, passives };
+  p.spirits.push(spirit);
+  if (!p.spirit) p.spirit = spirit.uid;
+  return { spirit };
+}
+
+export function equipSpirit(p, uid) {
+  if (uid && !spiritOf(p, uid)) return 'ไม่พบภูติตัวนี้';
+  p.spirit = uid || null;
+  return null;
 }
 
 // ---------- dungeon progress ----------

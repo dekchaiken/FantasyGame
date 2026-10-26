@@ -40,11 +40,11 @@ export function buildField(scene, mapId, def, avoid) {
   const half = def.size / 2;
   const n = Math.round(half / TILE);
   const rnd = seeded(mapId.length * 97 + 13);
-  scene.fog = new THREE.Fog(bio.fog, 40, 110);
+  scene.fog = new THREE.Fog(bio.fog, 70, 200);
 
   // sky dome
   const sky = new THREE.Mesh(
-    new THREE.SphereGeometry(150, 32, 16),
+    new THREE.SphereGeometry(240, 32, 16),
     new THREE.MeshBasicMaterial({ vertexColors: true, side: THREE.BackSide, fog: false }),
   );
   const top = new THREE.Color(def.biome === 'mine' ? '#1c0f14' : '#4aa6e8');
@@ -53,7 +53,7 @@ export function buildField(scene, mapId, def, avoid) {
   const pos = sky.geometry.attributes.position;
   const cols = [];
   for (let i = 0; i < pos.count; i++) {
-    const k = THREE.MathUtils.clamp(pos.getY(i) / 150, 0, 1);
+    const k = THREE.MathUtils.clamp(pos.getY(i) / 240, 0, 1);
     c.copy(hor).lerp(top, Math.pow(k, 0.6));
     cols.push(c.r, c.g, c.b);
   }
@@ -65,7 +65,7 @@ export function buildField(scene, mapId, def, avoid) {
   sun.position.set(-10, 22, 12);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  Object.assign(sun.shadow.camera, { left: -22, right: 22, top: 22, bottom: -22, near: 1, far: 80 });
+  Object.assign(sun.shadow.camera, { left: -34, right: 34, top: 34, bottom: -34, near: 1, far: 110 });
   sun.shadow.camera.updateProjectionMatrix();
   scene.add(sun, sun.target);
 

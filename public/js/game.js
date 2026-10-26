@@ -12,6 +12,7 @@ import { JOB_NAMES } from './skills.js';
 import { Sfx } from './sfx.js';
 import { MAPS, PORTALS, NPCS, MONSTERS, QUESTS, MATERIALS, GEAR, RARITY, GRADES, DUNGEONS, TOWER } from './data.js';
 import * as DG from './dungeon.js';
+import { SPIRIT_RARITY } from './data.js';
 import { SKILL_BY_ID, rankMult, rankCooldown } from './skills.js';
 import * as P from './progress.js';
 import { Stage } from './stage.js';
@@ -65,7 +66,7 @@ export const Game = {
   stats: null,
   map: null,
   scene: null,
-  camera: new THREE.PerspectiveCamera(40, 1, 0.1, 300),
+  camera: new THREE.PerspectiveCamera(40, 1, 0.1, 340),
   world: null,
   fx: null,
   nav: null,
@@ -236,11 +237,14 @@ export const Game = {
       world.labels.push({ x: npc.pos[0], y: 2.5, z: npc.pos[1], text: npc.name, kind: 'npc', npc: npcId });
     }
 
-    for (const [mid, count] of def.spawns || []) {
-      for (let i = 0; i < count; i++) {
-        const home = freeSpot(world);
-        world.monsters.push(new Monster(this.scene, mid, MONSTERS[mid], home));
+    // Monsters live in habitat zones: each kind keeps to its own part of the map.
+    for (const z of def.zones || []) {
+      for (const [mid, count] of z.mons) {
+        for (let i = 0; i < count; i++) world.monsters.push(new Monster(this.scene, mid, MONSTERS[mid], zoneSpot(world, z)));
       }
+    }
+    for (const [mid, count] of def.spawns || []) {
+      for (let i = 0; i < count; i++) world.monsters.push(new Monster(this.scene, mid, MONSTERS[mid], freeSpot(world)));
     }
 
     const g = this.hero.group;
@@ -262,6 +266,7 @@ export const Game = {
     this.moveTarget = null;
     this.interactNpc = null;
     this.p.map = id;
+    this.syncSpirit();
     this.p.pos = [sx, sz];
     this.dirty = true;
 
@@ -437,6 +442,7 @@ export const Game = {
     if (this.auto) this.autoTick(dt);
     if (this.questAuto) this.questTick(dt);
     this.runTick(dt);
+    this.updateSpirit();
 
     const len = Math.hypot(ix, iz);
     h.moving = len > 0;
@@ -1015,6 +1021,64 @@ export const Game = {
     if (!this.auto) this.autoTick(dt);
   },
 
+  // ---------- spirits (ภูติ) ----------
+  // One spirit orb floats beside the hero. Its colour follows the spirit's rarity; mythic cycles through colours.
+  syncSpirit() {
+    if (!this.hero) return;
+    const sp = P.spiritOf(this.p, this.p.spirit);
+    if (!this.spiritOrb) {
+      const orb = new THREE.Mesh(new THREE.SphereGeometry(0.16, 16, 12), new THREE.MeshStandardMaterial({ emissiveIntensity: 1.1, transparent: true, opacity: 0.95 }));
+      const halo = new THREE.Mesh(new THREE.SphereGeometry(0.3, 16, 12), new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.22, depthWrite: false }));
+      orb.add(halo);
+      this.hero.group.add(orb);
+      this.spiritOrb = orb;
+    }
+    this.spiritOrb.visible = !!sp;
+    if (!sp) return;
+    this.spiritRarity = SPIRIT_RARITY.find((r) => r.id === sp.rarity);
+    const color = this.spiritRarity.rainbow ? '#ffffff' : this.spiritRarity.color;
+    this.spiritOrb.material.color.set(color);
+    this.spiritOrb.material.emissive.set(color);
+    this.spiritOrb.children[0].material.color.set(color);
+  },
+
+  updateSpirit() {
+    const o = this.spiritOrb;
+    if (!o || !o.visible) return;
+    const t = performance.now() / 1000;
+    const a = t * 1.4;
+    o.position.set(Math.cos(a) * 0.95, 2.05 + Math.sin(t * 2.2) * 0.12, Math.sin(a) * 0.95);
+    if (this.spiritRarity?.rainbow) {
+      const c = new THREE.Color().setHSL((t * 0.18) % 1, 0.9, 0.6);
+      o.material.color.copy(c);
+      o.material.emissive.copy(c);
+      o.children[0].material.color.copy(c);
+    }
+  },
+
+  summonSpirit(orbId) {
+    const r = P.summonSpirit(this.p, orbId);
+    if (r.error) { Hud.toast(r.error, 'warn'); Sfx.play('error'); return; }
+    const rarity = SPIRIT_RARITY.find((x) => x.id === r.spirit.rarity);
+    Hud.toast(`ได้ภูติ${rarity.name}!`, 'gold');
+    Sfx.play('success', SPIRIT_RARITY.indexOf(rarity));
+    this.aura(rarity.rainbow ? '#ff9ad5' : rarity.color, 2.4);
+    this.syncSpirit();
+    this.refreshStats(false);
+    this.dirty = true;
+    Hud.refresh(this);
+  },
+
+  equipSpirit(uid) {
+    const err = P.equipSpirit(this.p, uid);
+    if (err) { Hud.toast(err, 'warn'); return; }
+    Sfx.play('click');
+    this.syncSpirit();
+    this.refreshStats(false);
+    this.dirty = true;
+    Hud.refresh(this);
+  },
+
   // ---------- dungeons and tower ----------
   async enterDungeon(id) {
     const tower = id === 'tower';
@@ -1196,6 +1260,21 @@ async function loadSkillMap(classId) {
 }
 
 // Random point inside the map that is not on a solid, a portal or an NPC.
+// A free point inside a habitat zone, falling back to any free spot when the zone is crowded.
+function zoneSpot(world, z) {
+  for (let i = 0; i < 80; i++) {
+    const a = Math.random() * Math.PI * 2;
+    const d = Math.sqrt(Math.random()) * z.r;
+    const x = z.x + Math.cos(a) * d;
+    const zz = z.z + Math.sin(a) * d;
+    if (Math.abs(x) > world.limit || Math.abs(zz) > world.limit) continue;
+    if (blocked(world.solids, x, zz, 1.2)) continue;
+    if (world.portals.some((e) => Math.hypot(e.x - x, e.z - zz) < 5)) continue;
+    return { x, z: zz };
+  }
+  return freeSpot(world);
+}
+
 function freeSpot(world) {
   const limit = world.limit ?? TOWN_LIMIT;
   for (let i = 0; i < 60; i++) {

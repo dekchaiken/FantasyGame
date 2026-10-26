@@ -46,6 +46,22 @@ function buildModel(def) {
       animParts[`leg${x > 0 ? 'F' : 'B'}${z > 0 ? 'L' : 'R'}`] = add(body, rbox(0.14, 0.5, 0.14, 0.05), dark, x, 0.25, z);
     }
     for (const z of [-0.14, 0.14]) add(body, new THREE.SphereGeometry(0.06, 8, 6), std('#ff5d73', { emissive: '#ff5d73', emissiveIntensity: 1 }), 0.98, 1.0, z);
+  } else if (def.shape === 'mushroom') {
+    add(body, new THREE.CylinderGeometry(0.16, 0.22, 0.6, 10), std('#f3e9d2'), 0, 0.3, 0);
+    add(body, new THREE.SphereGeometry(0.5, 16, 10, 0, Math.PI * 2, 0, Math.PI / 2), bodyMat, 0, 0.6, 0);
+    for (const [x, y, z] of [[0.22, 0.85, 0.15], [-0.2, 0.9, -0.1], [0.05, 0.98, -0.3]]) {
+      add(body, new THREE.SphereGeometry(0.07, 8, 6), std('#ffffff', { emissive: '#ffffff', emissiveIntensity: 0.4 }), x, y, z);
+    }
+    add(body, new THREE.SphereGeometry(0.06, 8, 6), std('#1a1a2e'), -0.12, 0.3, 0.16);
+    add(body, new THREE.SphereGeometry(0.06, 8, 6), std('#1a1a2e'), 0.12, 0.3, 0.16);
+  } else if (def.shape === 'bat') {
+    const wing = std('#3a2f52');
+    add(body, new THREE.SphereGeometry(0.28, 14, 10), bodyMat, 0, 1.0, 0);
+    for (const s of [-1, 1]) {
+      const w = add(body, rbox(0.95, 0.04, 0.55, 0.02), wing, s * 0.55, 1.05, 0);
+      w.rotation.z = s * 0.25;
+      add(body, new THREE.SphereGeometry(0.06, 8, 6), std('#ff5d73', { emissive: '#ff5d73', emissiveIntensity: 1 }), s * 0.1, 1.08, 0.22);
+    }
   } else if (def.shape === 'golem') {
     const rock = std('#3d3a46', { roughness: 0.9 });
     mats.push(rock);
@@ -93,7 +109,7 @@ export class Monster {
     this.group.position.set(this.x, 0, this.z);
     this.group.rotation.y = Math.random() * Math.PI * 2;
     scene.add(this.group);
-    this.bar = makeBar(def.shape === 'golem' ? 3.8 : def.shape === 'wolf' ? 2.0 : 1.5);
+    this.bar = makeBar(def.shape === 'golem' ? 3.8 : def.shape === 'wolf' ? 2.0 : def.shape === 'bat' ? 2.0 : 1.5);
     this.group.add(this.bar);
     this.phase = Math.random() * 10;
   }
